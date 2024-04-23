@@ -24,10 +24,15 @@ module Invoca
 
           parser = OptionParser.new do |op|
             op.banner = "Usage: #{$PROGRAM_NAME} --rendered-directory=<directory> <template directory>"
-            op.on("--rendered-directory=RENDERED_DIRECTORY", "set the directory where rendered output is written") { |directory| args.rendered_directory = directory }
-            op.on("--[no-]fork", "disable/enable fork") { |fork| args.fork = fork }
-            op.on("--makeflags=MAKEFLAGS", "pass through makeflags so that we can infer fork preference from -j") { |makeflags| args.makeflags = makeflags }
-            op.on("--jsonnet_library_path=JSONNET_LIBRARY_PATH", "set the jsonnet library path") { |jsonnet_library_path| args.jsonnet_library_path = jsonnet_library_path }
+
+            op.on("--rendered-directory=RENDERED_DIRECTORY",     "set the directory where rendered output is written")                  { args.rendered_directory = _1 }
+            op.on("--[no-]fork",                                 "disable/enable fork")                                                 { |fork| args.fork = fork }
+            op.on("--makeflags=MAKEFLAGS",                       "pass through makeflags so that we can infer fork preference from -j") { args.makeflags = _1 }
+            op.on("--jsonnet_library_path=JSONNET_LIBRARY_PATH", "set the jsonnet library path")                                        { args.jsonnet_library_path = _1 }
+            op.on("--cluster_type=CLUSTER_TYPE",                 "set the specific cluster type to render")                             { args.cluster_type = _1 }
+            op.on("--region=REGION",                             "set the specific region to render")                                   { args.region = _1 }
+            op.on("--color=COLOR",                               "set the specific color to render")                                    { args.color = _1 }
+
             op.on("-h", "--help") do
               puts op
               exit
