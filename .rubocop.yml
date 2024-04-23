@@ -1,0 +1,6 @@
+# Inherit from the Invoca style guide
+inherit_from: https://raw.githubusercontent.com/Invoca/style-guide/master/ruby/.rubocop.yml
+
+AllCops:
+  TargetRubyVersion: 3.1
+Gemspec/RequireMFA: false

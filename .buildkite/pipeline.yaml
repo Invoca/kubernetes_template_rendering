@@ -1,0 +1,13 @@
+---
+common_config: &common_config
+  agents:
+    queue: "ruby-3-1"
+  timeout_in_minutes: 5
+steps:
+- label: ":ruby: Render Test Matrix"
+  timeout_in_minutes: 5
+  plugins:
+    - ssh://git@github.com/Invoca/invoca-ruby-test-matrix-buildkite-plugin.git#main:
+        min_ruby_version: '3.1'
+        slack_notification_channel: '#dev-team-release-backend-tools-octothorpe'
+        test_command: "bundle exec rspec"
