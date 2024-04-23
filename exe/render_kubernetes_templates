@@ -1,0 +1,12 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "erb"
+require "fileutils"
+require "optparse"
+require "ostruct"
+require "pathname"
+require "yaml"
+require_relative "../lib/invoca/kubernetes_templates/cli"
+
+Invoca::KubernetesTemplates::CLI.parse_and_render(ARGV)

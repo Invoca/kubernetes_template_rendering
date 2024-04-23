@@ -1,0 +1,6 @@
+PLACEHOLDER:
+  directory: PLACEHOLDER/sfc_test
+  variables:
+    platform_name: PLACEHOLDER
+    namespace: call-imports
+    owner: omega
