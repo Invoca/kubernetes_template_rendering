@@ -14,12 +14,15 @@ module Invoca
     class TemplateDirectoryRenderer
       DEFINITIONS_FILENAME = "definitions.yaml"
 
-      attr_reader :directories, :omitted_names, :rendered_directory
+      attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color
 
-      def initialize(directories:, omitted_names: [], rendered_directory:)
-        @directories = directories_with_definitions(Array(directories))
-        @omitted_names = Array(omitted_names)
+      def initialize(directories:, rendered_directory:, omitted_names: [], cluster_type: nil, region: nil, color: nil)
+        @directories        = directories_with_definitions(Array(directories))
+        @omitted_names      = Array(omitted_names)
         @rendered_directory = rendered_directory
+        @cluster_type       = cluster_type
+        @region             = region
+        @color              = color
       end
 
       def render(args)
@@ -147,7 +150,14 @@ module Invoca
           raise "error loading YAML from #{definitions_path}:\n#{ex.class}: #{ex.message}"
         end
 
-        expand_config(config).each_with_object({}) { |(name, data), hash| hash[name] = OpenStruct.new(data) }
+        expand_config(config).each_with_object({}) do |(name, data), hash|
+          if !cluster_type || cluster_type == name.sub('SPP-PLACEHOLDER', 'staging').sub(/\..*/, '') # prod.gcp => prod
+            cluster_type_config = OpenStruct.new(data)
+            cluster_type_config.regions = cluster_type_config.regions & [region] if region
+            cluster_type_config.colors  = cluster_type_config.colors & [color]   if color
+            hash[name] = cluster_type_config if cluster_type_config.regions.any? && cluster_type_config.colors.any?
+          end
+        end
       end
 
       # returns a copy of the given config hash with the COMMON: k-v removed and deep merged into the other config values

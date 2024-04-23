@@ -53,7 +53,13 @@ module Invoca
         def renderer_from_args(args)
           directories = template_directories(args.template_directory, DEFINITIONS_FILENAME)
 
-          TemplateDirectoryRenderer.new(directories: directories, rendered_directory: args.rendered_directory)
+          TemplateDirectoryRenderer.new(
+            directories: directories,
+            rendered_directory: args.rendered_directory,
+            cluster_type: args.cluster_type,
+            region: args.region,
+            color: args.color
+          )
         end
 
         def template_directories(template_directory, definitions_file)
