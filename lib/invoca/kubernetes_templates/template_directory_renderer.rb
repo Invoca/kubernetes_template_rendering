@@ -14,15 +14,16 @@ module Invoca
     class TemplateDirectoryRenderer
       DEFINITIONS_FILENAME = "definitions.yaml"
 
-      attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color
+      attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color, :variable_overrides
 
-      def initialize(directories:, rendered_directory:, omitted_names: [], cluster_type: nil, region: nil, color: nil)
+      def initialize(directories:, rendered_directory:, omitted_names: [], cluster_type: nil, region: nil, color: nil, variable_overrides: nil)
         @directories        = directories_with_definitions(Array(directories))
         @omitted_names      = Array(omitted_names)
         @rendered_directory = rendered_directory
         @cluster_type       = cluster_type
         @region             = region
         @color              = color
+        @variable_overrides = variable_overrides || {}
       end
 
       def render(args)
@@ -153,9 +154,12 @@ module Invoca
         expand_config(config).each_with_object({}) do |(name, data), hash|
           if !cluster_type || cluster_type == name.sub('SPP-PLACEHOLDER', 'staging').sub(/\..*/, '') # prod.gcp => prod
             cluster_type_config = OpenStruct.new(data)
-            cluster_type_config.regions = cluster_type_config.regions & [region] if region
-            cluster_type_config.colors  = cluster_type_config.colors & [color]   if color
-            hash[name] = cluster_type_config if cluster_type_config.regions.any? && cluster_type_config.colors.any?
+
+            cluster_type_config.regions   = cluster_type_config.regions & [region] if region
+            cluster_type_config.colors    = cluster_type_config.colors & [color]   if color
+            cluster_type_config.variables = cluster_type_config.variables.merge(variable_overrides)
+
+            hash[name] = cluster_type_config if (region.nil? && color.nil?) || (cluster_type_config.regions.any? && cluster_type_config.colors.any?)
           end
         end
       end

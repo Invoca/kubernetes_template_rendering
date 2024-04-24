@@ -11,7 +11,8 @@ module Invoca
         :jsonnet_library_path,
         :cluster_type,
         :region,
-        :color
+        :color,
+        :variable_overrides
       ) do
         def valid?
           rendered_directory && template_directory

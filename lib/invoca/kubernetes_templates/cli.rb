@@ -33,6 +33,11 @@ module Invoca
             op.on("--region=REGION",                             "set the specific region to render")                                   { args.region = _1 }
             op.on("--color=COLOR",                               "set the specific color to render")                                    { args.color = _1 }
 
+            op.on("--variable-override=KEY:VALUE", "override a variable value set within definitions.yaml") do |override|
+              args.variable_overrides ||= {}
+              args.variable_overrides.merge!(Hash[[override.split(":", 2)]])
+            end
+
             op.on("-h", "--help") do
               puts op
               exit
@@ -58,7 +63,8 @@ module Invoca
             rendered_directory: args.rendered_directory,
             cluster_type: args.cluster_type,
             region: args.region,
-            color: args.color
+            color: args.color,
+            variable_overrides: args.variable_overrides
           )
         end
 
