@@ -157,7 +157,7 @@ module Invoca
 
             cluster_type_config.regions   = cluster_type_config.regions & [region] if region
             cluster_type_config.colors    = cluster_type_config.colors & [color]   if color
-            cluster_type_config.variables = cluster_type_config.variables.merge(variable_overrides)
+            cluster_type_config.variables = (cluster_type_config.variables || {}).merge(variable_overrides)
 
             hash[name] = cluster_type_config if (region.nil? && color.nil?) || (cluster_type_config.regions.any? && cluster_type_config.colors.any?)
           end
