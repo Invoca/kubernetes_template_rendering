@@ -1,24 +1,41 @@
 # Invoca::KubernetesTemplates
 
-TODO: Delete this and the text below, and describe your gem
-
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/invoca/kubernetes_templates`. To experiment with that code, run `bin/console` for an interactive prompt.
+The `invoca-kubernetes_template` gem is a thin wrapper around `jsonnet` and `erb` to allow for the generation of
+Kubernetes manifests from a set of templates combined with a `definitions.yaml` file which stores environmental
+configuration for various deployment environments.
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
-
 Install the gem and add to the application's Gemfile by executing:
-
-    $ bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+```
+bundle add invoca-kubernetes_templates
+```
 
 If bundler is not being used to manage dependencies, install the gem by executing:
-
-    $ gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+```
+gem install invoca-kubernetes_templates
+```
 
 ## Usage
 
-TODO: Write usage instructions here
+This gem is meant to be used as a command line tool for rendering templates that are either written in `jsonnet` or `erb`.
+To use this gem you can either install it, and use the `render_kubernetes_template` executable directly, or you can use
+`gem exec` to execute the command without first installing the gem.
+
+### Example Usage
+```bash
+gem exec -g invoca-kubernetes_templates render_kubernetes_templates -- \
+    --jsonnet-library-path deployment/vendor \
+    --rendered_directory path/to/resources \
+    deployment/templates
+```
+
+### Options
+
+To see a full list of options and how to use them, run the following command:
+```bash
+gem exec -g invoca-kubernetes_templates render_kubernetes_templates -- --help
+```
 
 ## Development
 
@@ -28,4 +45,4 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/invoca-kubernetes_templates.
+Bug reports and pull requests are welcome on GitHub at https://github.com/invoca/invoca-kubernetes_templates.
