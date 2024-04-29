@@ -45,6 +45,7 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
 
   before do
     stub_puts
+    allow(File).to receive(:exist?).and_call_original
     allow(File).to receive(:exist?).with(expanded_output_directory).and_return(output_directory_exists?)
     allow(FileUtils).to receive(:mkdir_p).with(output_directory)
   end
@@ -61,9 +62,21 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
     end
 
     context "when it exists" do
+      let(:output_directory_exists?) { true }
+
       it "does not create the directory" do
         expect(FileUtils).to_not receive(:mkdir_p)
         resource_set.render(args)
+      end
+
+      context "when the prune flag is set" do
+        let(:args) { super().tap { _1.prune = true } }
+
+        it "prunes the directory" do
+          expect(FileUtils).to_not receive(:mkdir_p)
+          expect(FileUtils).to receive(:rm_rf).with("#{expanded_output_directory}/*")
+          resource_set.render(args)
+        end
       end
     end
 
@@ -73,6 +86,16 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
       it "creates the directory" do
         expect(FileUtils).to receive(:mkdir_p).with(expanded_output_directory)
         resource_set.render(args)
+      end
+
+      context "when the prune flag is set" do
+        let(:args) { super().tap { _1.prune = false } }
+
+        it "does not prune the directory" do
+          expect(FileUtils).to receive(:mkdir_p).with(expanded_output_directory)
+          expect(FileUtils).to_not receive(:rm_rf)
+          resource_set.render(args)
+        end
       end
     end
   end

@@ -93,7 +93,11 @@ RSpec.describe KubernetesTemplateRendering::CLI do
         expect(KubernetesTemplateRendering::TemplateDirectoryRenderer).to receive(:new)
                                                .with(
                                                  directories: [template_directory_option],
-                                                 rendered_directory: render_directory
+                                                 rendered_directory: render_directory,
+                                                 color: nil,
+                                                 region: nil,
+                                                 cluster_type: nil,
+                                                 variable_overrides: nil
                                                )
                                                .and_return(renderer)
 

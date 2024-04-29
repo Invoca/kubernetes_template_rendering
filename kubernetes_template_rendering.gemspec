@@ -6,14 +6,14 @@ Gem::Specification.new do |spec|
   spec.name    = "kubernetes_template_rendering"
   spec.version = KubernetesTemplateRendering::VERSION
   spec.authors = ["Octothorpe"]
-  spec.email = ["octothorpe@invoca.com"]
+  spec.email   = ["octothorpe@invoca.com"]
 
   spec.summary     = "Tool for rendering ERB and Jsonnet templates"
   spec.description = spec.summary
   spec.homepage    = "https://github.com/Invoca/kubernetes_template_rendering"
 
   spec.metadata = {
-    "allowed_push_host" => "TODO: Set to your gem server 'https://example.com'",
+    "allowed_push_host" => "https://rubygems.org",
     "homepage_uri"      => spec.homepage,
     "source_code_uri"   => "https://github.com/Invoca/kubernetes_template_rendering",
     "changelog_uri"     => "https://github.com/Invoca/kubernetes_template_rendering/blob/main/CHANGELOG.md",
