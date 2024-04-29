@@ -24,7 +24,7 @@ To use this gem you can either install it, and use the `render_kubernetes_templa
 
 ### Example Usage
 ```bash
-gem exec -g kubernetes_template_rendering render_kubernetes_templates \
+gem exec -g kubernetes_template_rendering render_templates \
     --jsonnet-library-path deployment/vendor \
     --rendered_directory path/to/resources \
     deployment/templates
@@ -34,7 +34,7 @@ gem exec -g kubernetes_template_rendering render_kubernetes_templates \
 
 To see a full list of options and how to use them, run the following command:
 ```bash
-gem exec -g kubernetes_template_rendering render_kubernetes_templates --help
+gem exec -g kubernetes_template_rendering render_templates --help
 ```
 
 ## Development
