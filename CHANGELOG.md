@@ -1,4 +1,4 @@
-# CHANGELOG for `invoca-kubernetes_templates`
+# CHANGELOG for `kubernetes_template_rendering`
 
 Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 

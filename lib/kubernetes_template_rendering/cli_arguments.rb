@@ -1,8 +1,18 @@
 # frozen_string_literal: true
 
-module Invoca
-  module KubernetesTemplates
-    CLIArguments = Struct.new(:rendered_directory, :template_directory, :fork, :makeflags, :jsonnet_library_path) do
+module KubernetesTemplateRendering
+  CLIArguments =
+    Struct.new(
+      :rendered_directory,
+      :template_directory,
+      :fork,
+      :makeflags,
+      :jsonnet_library_path,
+      :cluster_type,
+      :region,
+      :color,
+      :variable_overrides
+    ) do
       def valid?
         rendered_directory && template_directory
       end
@@ -19,5 +29,4 @@ module Invoca
         true
       end
     end
-  end
 end

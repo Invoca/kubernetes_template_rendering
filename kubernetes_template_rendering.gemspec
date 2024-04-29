@@ -1,22 +1,22 @@
 # frozen_string_literal: true
 
-require_relative "lib/invoca/kubernetes_templates/version"
+require_relative "lib/kubernetes_template_rendering/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "invoca-kubernetes_templates"
-  spec.version = Invoca::KubernetesTemplates::VERSION
+  spec.name    = "kubernetes_template_rendering"
+  spec.version = KubernetesTemplateRendering::VERSION
   spec.authors = ["Octothorpe"]
   spec.email = ["octothorpe@invoca.com"]
 
-  spec.summary               = "Tool for rendering ERB and Jsonnet templates"
-  spec.description           = spec.summary
-  spec.homepage              = "https://github.com/Invoca/inovca-kubernetes_templates"
+  spec.summary     = "Tool for rendering ERB and Jsonnet templates"
+  spec.description = spec.summary
+  spec.homepage    = "https://github.com/Invoca/kubernetes_template_rendering"
 
   spec.metadata = {
     "allowed_push_host" => "TODO: Set to your gem server 'https://example.com'",
     "homepage_uri"      => spec.homepage,
-    "source_code_uri"   => "https://github.com/Invoca/inovca-kubernetes_templates",
-    "changelog_uri"     => "https://github.com/Invoca/inovca-kubernetes_templates/blob/main/CHANGELOG.md",
+    "source_code_uri"   => "https://github.com/Invoca/kubernetes_template_rendering",
+    "changelog_uri"     => "https://github.com/Invoca/kubernetes_template_rendering/blob/main/CHANGELOG.md",
   }
 
   spec.required_ruby_version = ">= 3.1.0"

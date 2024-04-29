@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require_relative "../../../lib/invoca/kubernetes_templates/resource"
-require_relative "../../../lib/invoca/kubernetes_templates/cli_arguments"
+require_relative "../../lib/kubernetes_template_rendering/resource"
+require_relative "../../lib/kubernetes_template_rendering/cli_arguments"
 
-RSpec.describe Invoca::KubernetesTemplates::Resource do
+RSpec.describe KubernetesTemplateRendering::Resource do
   subject(:resource) do
     described_class.new(
       template_path: template_path,
@@ -19,7 +19,7 @@ RSpec.describe Invoca::KubernetesTemplates::Resource do
   let(:variables) { { "a" => "1", "b" => "2" } }
   let(:output_directory) { "dir" }
   let(:jsonnet_library_path) { nil }
-  let(:args) { Invoca::KubernetesTemplates::CLIArguments.new(rendered_directory, template_path, false, '', jsonnet_library_path) }
+  let(:args) { KubernetesTemplateRendering::CLIArguments.new(rendered_directory, template_path, false, '', jsonnet_library_path) }
 
   before do
     stub_puts
@@ -29,7 +29,7 @@ RSpec.describe Invoca::KubernetesTemplates::Resource do
   shared_examples "resource render" do
     it "writes the rendered template to the specified file" do
       template_output = "rendered output"
-      expect(Invoca::KubernetesTemplates::ErbTemplate).to receive(:render).with(template_path, variables, {jsonnet_library_path: jsonnet_library_path}).and_return(template_output)
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render).with(template_path, variables, {jsonnet_library_path: jsonnet_library_path}).and_return(template_output)
 
       expect(File).to receive(:write).with("dir/#{expected_filename}", template_output)
 

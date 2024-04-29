@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "../../../lib/invoca/kubernetes_templates/deploy_grouped_resource"
+require_relative "../../lib/kubernetes_template_rendering/deploy_grouped_resource"
 
-RSpec.describe Invoca::KubernetesTemplates::DeployGroupedResource do
+RSpec.describe KubernetesTemplateRendering::DeployGroupedResource do
   subject(:grouped) do
     described_class.new(
       template_path: template_path,
@@ -24,7 +24,7 @@ RSpec.describe Invoca::KubernetesTemplates::DeployGroupedResource do
   let(:groups_to_render) { ["primary", "secondary"] }
   let(:template_path_exclusions) { }
   let(:group_variable_name) { }
-  let(:args) { Invoca::KubernetesTemplates::CLI::Arguments.new(rendered_directory, template_directory, false, '') }
+  let(:args) { KubernetesTemplateRendering::CLI::Arguments.new(rendered_directory, template_directory, false, '') }
 
   before do
     stub_puts
@@ -33,9 +33,9 @@ RSpec.describe Invoca::KubernetesTemplates::DeployGroupedResource do
   context "when no templates are excluded" do
     it "creates and renders a Resource for each deploy group" do
       groups_to_render.each do |group|
-        resource = instance_double(Invoca::KubernetesTemplates::Resource)
+        resource = instance_double(KubernetesTemplateRendering::Resource)
 
-        expect(Invoca::KubernetesTemplates::Resource).to receive(:new)
+        expect(KubernetesTemplateRendering::Resource).to receive(:new)
                               .with(
                                 template_path: template_path,
                                 variables: variables.merge("deploy_group" => group),
@@ -60,8 +60,8 @@ RSpec.describe Invoca::KubernetesTemplates::DeployGroupedResource do
     end
 
     it "excludes the template path from the deploy group" do
-      resource = instance_double(Invoca::KubernetesTemplates::Resource)
-      expect(Invoca::KubernetesTemplates::Resource).to receive(:new)
+      resource = instance_double(KubernetesTemplateRendering::Resource)
+      expect(KubernetesTemplateRendering::Resource).to receive(:new)
                             .with(
                               template_path: template_path,
                               variables: variables.merge("deploy_group" => "secondary"),
@@ -80,9 +80,9 @@ RSpec.describe Invoca::KubernetesTemplates::DeployGroupedResource do
 
     it "provides the group under the provided group_variable_name" do
       groups_to_render.each do |group|
-        resource = instance_double(Invoca::KubernetesTemplates::Resource)
+        resource = instance_double(KubernetesTemplateRendering::Resource)
 
-        expect(Invoca::KubernetesTemplates::Resource).to receive(:new)
+        expect(KubernetesTemplateRendering::Resource).to receive(:new)
                               .with(
                                 template_path: template_path,
                                 variables: variables.merge("owner" => group),
