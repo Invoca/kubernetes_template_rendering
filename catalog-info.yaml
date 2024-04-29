@@ -2,12 +2,18 @@ apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: kubernetes_template_rendering
+  title: Kubernetes Template Rendering gem
+  description: |
+    A Ruby gem that provides a way to render Kubernetes templates using ERB and Jsonnet.
   annotations:
     github.com/project-slug: invoca/kubernetes_template_rendering
     backstage.io/adr-location: >-
       https://github.com/Invoca/kubernetes_template_rendering/tree/main/docs/adrs
     backstage.io/techdocs-ref: dir:.
+    buildkite.com/project-slug: invoca/kubernetes-template-rendering
+    invoca.com/version-repository-location: rubygems
+    invoca.com/version-repository-name: kubernetes_template_rendering
 spec:
-  type: other
-  lifecycle: unknown
+  type: Library
+  lifecycle: production
   owner: octothorpe
