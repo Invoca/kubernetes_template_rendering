@@ -1,4 +1,4 @@
-# Invoca::KubernetesTemplates
+# KubernetesTemplateRendering
 
 The `invoca-kubernetes_template` gem is a thin wrapper around `jsonnet` and `erb` to allow for the generation of
 Kubernetes manifests from a set of templates combined with a `definitions.yaml` file which stores environmental
@@ -8,12 +8,12 @@ configuration for various deployment environments.
 
 Install the gem and add to the application's Gemfile by executing:
 ```
-bundle add invoca-kubernetes_templates
+bundle add kubernetes_template_rendering
 ```
 
 If bundler is not being used to manage dependencies, install the gem by executing:
 ```
-gem install invoca-kubernetes_templates
+gem install kubernetes_template_rendering
 ```
 
 ## Usage
@@ -24,7 +24,7 @@ To use this gem you can either install it, and use the `render_kubernetes_templa
 
 ### Example Usage
 ```bash
-gem exec -g invoca-kubernetes_templates render_kubernetes_templates \
+gem exec -g kubernetes_template_rendering render_kubernetes_templates \
     --jsonnet-library-path deployment/vendor \
     --rendered_directory path/to/resources \
     deployment/templates
@@ -34,7 +34,7 @@ gem exec -g invoca-kubernetes_templates render_kubernetes_templates \
 
 To see a full list of options and how to use them, run the following command:
 ```bash
-gem exec -g invoca-kubernetes_templates render_kubernetes_templates --help
+gem exec -g kubernetes_template_rendering render_kubernetes_templates --help
 ```
 
 ## Development
@@ -45,4 +45,4 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/invoca/invoca-kubernetes_templates.
+Bug reports and pull requests are welcome on GitHub at https://github.com/invoca/kubernetes_template_rendering.

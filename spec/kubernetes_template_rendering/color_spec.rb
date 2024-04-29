@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "../../../lib/invoca/kubernetes_templates/color"
+require_relative "../../lib/kubernetes_template_rendering/color"
 
-RSpec.describe Invoca::KubernetesTemplates::Color do
+RSpec.describe KubernetesTemplateRendering::Color do
   subject(:color) { described_class }
 
   it "outputs the expected ANSI color codes" do

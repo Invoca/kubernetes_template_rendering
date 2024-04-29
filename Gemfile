@@ -2,7 +2,7 @@
 
 source "https://rubygems.org"
 
-# Specify your gem's dependencies in invoca-kubernetes_templates.gemspec
+# Specify your gem's dependencies in kubernetes_template_rendering.gemspec
 gemspec
 
 gem "rake", "~> 13.0"
