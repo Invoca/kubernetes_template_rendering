@@ -11,7 +11,8 @@ module KubernetesTemplateRendering
       :cluster_type,
       :region,
       :color,
-      :variable_overrides
+      :variable_overrides,
+      :prune
     ) do
       def valid?
         rendered_directory && template_directory
@@ -23,6 +24,10 @@ module KubernetesTemplateRendering
         else
           fork
         end
+      end
+
+      def prune?
+        !!prune
       end
 
       def render_files?

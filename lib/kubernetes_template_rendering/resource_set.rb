@@ -63,6 +63,7 @@ module KubernetesTemplateRendering
     end
 
     def render_create_directory(args, output_directory)
+      prune_directory(output_directory) if args.prune?
       create_directory(output_directory)
       puts "Rendering templates to: #{Color.magenta(output_directory)}"
       puts "Variable assignments:"
@@ -164,6 +165,17 @@ module KubernetesTemplateRendering
 
         MESSAGE
         FileUtils.mkdir_p(directory)
+      end
+    end
+
+    def prune_directory(directory)
+      if File.exist?(directory)
+        puts <<~MESSAGE
+
+          The `prune` flag is set to true, #{Color.green('pruning')} directory #{Color.magenta(directory)} before rendering
+
+        MESSAGE
+        FileUtils.rm_rf("#{directory}/*")
       end
     end
 
