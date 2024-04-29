@@ -4,6 +4,9 @@ metadata:
   name: kubernetes_template_rendering
   annotations:
     github.com/project-slug: invoca/kubernetes_template_rendering
+    backstage.io/adr-location: >-
+      https://github.com/Invoca/kubernetes_template_rendering/tree/main/docs/adrs
+    backstage.io/techdocs-ref: dir:.
 spec:
   type: other
   lifecycle: unknown

@@ -1,0 +1,49 @@
+---
+on:
+  push:
+    branches:
+    - 'main'
+    - 'master'
+
+name: Documentation
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    concurrency:
+      group: publish-documentation-${{ github.event.repository.name }}
+      cancel-in-progress: true
+    env:
+      TECHDOCS_S3_BUCKET_NAME: ${{ secrets.TECHDOCS_S3_BUCKET_NAME }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.TECHDOCS_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TECHDOCS_AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.TECHDOCS_AWS_REGION }}
+      ENTITY_NAMESPACE: 'default'
+      ENTITY_KIND: 'Component'
+      ENTITY_NAME: "kubernetes_template_rendering"
+    steps:
+    - uses: actions/checkout@v2
+    
+    - uses: ruby/setup-ruby@v1
+    
+    - uses: actions/setup-node@v3
+    - uses: actions/setup-python@v3
+      with:
+        python-version: '3.11'
+    
+    - name: Install Ruby Dependencies
+      run: gem install yard yard-to_mkdocs --no-document
+    
+    - name: Install Python Dependencies
+      run: pip3 install mkdocs-techdocs-core==1.* mkdocs-section-index==0.*
+    - name: Install Node Dependencies
+      run: npm install -g @techdocs/cli
+    
+    - name: Generate yard documentation
+      run: gem install yard yard-to_mkdocs --no-document && yard doc --plugin to_mkdocs --title "Code Documentation" --output-dir docs/code
+    
+    - name: Generate Tech Docs
+      run: techdocs-cli generate --no-docker --source-dir ./ --output-dir ./site
+    - name: Publish Documentation
+      run: techdocs-cli publish --publisher-type awsS3 --storage-name $TECHDOCS_S3_BUCKET_NAME --entity $ENTITY_NAMESPACE/$ENTITY_KIND/$ENTITY_NAME
