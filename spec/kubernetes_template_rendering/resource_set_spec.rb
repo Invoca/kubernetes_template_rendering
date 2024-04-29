@@ -2,10 +2,10 @@
 
 require 'tmpdir'
 
-require_relative "../../../lib/invoca/kubernetes_templates/resource_set"
-require_relative "../../../lib/invoca/kubernetes_templates/cli_arguments"
+require_relative "../../lib/kubernetes_template_rendering/resource_set"
+require_relative "../../lib/kubernetes_template_rendering/cli_arguments"
 
-RSpec.describe Invoca::KubernetesTemplates::ResourceSet do
+RSpec.describe KubernetesTemplateRendering::ResourceSet do
   subject(:resource_set) do
     described_class.new(config: config,
                         rendered_directory: rendered_directory,
@@ -13,7 +13,7 @@ RSpec.describe Invoca::KubernetesTemplates::ResourceSet do
                         definitions_path: definitions_path,
                         kubernetes_cluster_type: "prod")
   end
-  let(:template_directory) { File.expand_path("../../fixtures/resource_set", __dir__) }
+  let(:template_directory) { File.expand_path("../fixtures/resource_set", __dir__) }
   let(:definitions_path) { "td/definitions.yaml" }
   let(:rendered_directory) { Dir.mktmpdir }
   let(:directory_in_config) { "../some-cluster/%{plain_region}-render-here" }
@@ -41,7 +41,7 @@ RSpec.describe Invoca::KubernetesTemplates::ResourceSet do
   let(:output_directory_exists?) { true }
   let(:output_directory) { File.join(rendered_directory, directory_in_config) }
   let(:expanded_output_directory) { output_directory.sub("%{plain_region}", "us-east-1") }
-  let(:args) { Invoca::KubernetesTemplates::CLIArguments.new(rendered_directory, template_directory, false, '') }
+  let(:args) { KubernetesTemplateRendering::CLIArguments.new(rendered_directory, template_directory, false, '') }
 
   before do
     stub_puts
@@ -51,13 +51,13 @@ RSpec.describe Invoca::KubernetesTemplates::ResourceSet do
 
   describe "output directory" do
     before do
-      resource = instance_double(Invoca::KubernetesTemplates::Resource)
+      resource = instance_double(KubernetesTemplateRendering::Resource)
       allow(resource).to receive(:render)
-      allow(Invoca::KubernetesTemplates::Resource).to receive(:new).and_return(resource)
+      allow(KubernetesTemplateRendering::Resource).to receive(:new).and_return(resource)
 
-      deploy_grouped = instance_double(Invoca::KubernetesTemplates::DeployGroupedResource)
+      deploy_grouped = instance_double(KubernetesTemplateRendering::DeployGroupedResource)
       allow(deploy_grouped).to receive(:render)
-      allow(Invoca::KubernetesTemplates::DeployGroupedResource).to receive(:new).and_return(deploy_grouped)
+      allow(KubernetesTemplateRendering::DeployGroupedResource).to receive(:new).and_return(deploy_grouped)
     end
 
     context "when it exists" do
@@ -88,16 +88,16 @@ RSpec.describe Invoca::KubernetesTemplates::ResourceSet do
         deploy_grouped = expand_paths(deploy_grouped_resources)
 
         standard.each do |path|
-          resource = instance_double(Invoca::KubernetesTemplates::Resource)
-          expect(Invoca::KubernetesTemplates::Resource).to receive(:new)
+          resource = instance_double(KubernetesTemplateRendering::Resource)
+          expect(KubernetesTemplateRendering::Resource).to receive(:new)
                                 .with(template_path: path, definitions_path: definitions_path, variables: variables, output_directory: expanded_output_directory)
                                 .and_return(resource)
           expect(resource).to receive(:render)
         end
 
         deploy_grouped.each do |path|
-          deploy_grouped_resource = instance_double(Invoca::KubernetesTemplates::DeployGroupedResource)
-          expect(Invoca::KubernetesTemplates::DeployGroupedResource).to receive(:new)
+          deploy_grouped_resource = instance_double(KubernetesTemplateRendering::DeployGroupedResource)
+          expect(KubernetesTemplateRendering::DeployGroupedResource).to receive(:new)
                                              .with(
                                                template_path: path,
                                                definitions_path: definitions_path,

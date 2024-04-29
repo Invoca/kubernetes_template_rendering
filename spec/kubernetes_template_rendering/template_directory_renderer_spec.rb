@@ -2,14 +2,14 @@
 
 require 'tmpdir'
 
-require_relative "../../../lib/invoca/kubernetes_templates/template_directory_renderer"
-require_relative "../../../lib/invoca/kubernetes_templates/cli_arguments"
+require_relative "../../lib/kubernetes_template_rendering/template_directory_renderer"
+require_relative "../../lib/kubernetes_template_rendering/cli_arguments"
 
-RSpec.describe Invoca::KubernetesTemplates::TemplateDirectoryRenderer do
+RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
   subject(:dir_renderer) { described_class.new(directories: [template_directory], rendered_directory: rendered_directory) }
   let(:rendered_directory) { Dir.mktmpdir }
   let(:template_directory) { Dir.mktmpdir }
-  let(:args) { Invoca::KubernetesTemplates::CLIArguments.new(rendered_directory, template_directory, false, '') }
+  let(:args) { KubernetesTemplateRendering::CLIArguments.new(rendered_directory, template_directory, false, '') }
   let(:variables) { { "variable1" => "value1", "variable2" => "value2" } }
 
   before do
@@ -28,10 +28,10 @@ RSpec.describe Invoca::KubernetesTemplates::TemplateDirectoryRenderer do
       File.write(definitions_path, definition.to_yaml)
 
       expected_config = OpenStruct.new(definition[resource_definition_name.to_s])
-      resource_set = instance_double(Invoca::KubernetesTemplates::ResourceSet)
+      resource_set = instance_double(KubernetesTemplateRendering::ResourceSet)
 
       expect(resource_set).to receive(:render)
-      expect(Invoca::KubernetesTemplates::ResourceSet).to receive(:new)
+      expect(KubernetesTemplateRendering::ResourceSet).to receive(:new)
                              .with(config: expected_config, rendered_directory: rendered_directory, template_directory: template_directory, definitions_path: definitions_path, kubernetes_cluster_type: expected_kubernetes_cluster_type)
                              .and_return(resource_set)
 

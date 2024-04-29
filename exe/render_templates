@@ -7,6 +7,6 @@ require "optparse"
 require "ostruct"
 require "pathname"
 require "yaml"
-require_relative "../lib/invoca/kubernetes_templates/cli"
+require_relative "../lib/kubernetes_template_rendering/cli"
 
-Invoca::KubernetesTemplates::CLI.parse_and_render(ARGV)
+KubernetesTemplateRendering::CLI.parse_and_render(ARGV)

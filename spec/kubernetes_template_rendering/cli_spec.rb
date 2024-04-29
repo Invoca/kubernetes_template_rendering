@@ -2,9 +2,9 @@
 
 require 'tmpdir'
 
-require_relative "../../../lib/invoca/kubernetes_templates/cli"
+require_relative "../../lib/kubernetes_template_rendering/cli"
 
-RSpec.describe Invoca::KubernetesTemplates::CLI do
+RSpec.describe KubernetesTemplateRendering::CLI do
   subject(:cli) do
     described_class.send(:parse, options).first
   rescue SystemExit => ex
@@ -72,7 +72,7 @@ RSpec.describe Invoca::KubernetesTemplates::CLI do
       let(:expected_directories) { directories_with_definitions.map { |dir| File.join(templates_directory, dir) } }
 
       it "returns a configured TemplateDirectoryRenderer" do
-        expect(cli).to be_a(Invoca::KubernetesTemplates::TemplateDirectoryRenderer)
+        expect(cli).to be_a(KubernetesTemplateRendering::TemplateDirectoryRenderer)
         expect(cli.directories.sort).to eq(expected_directories.sort)
         expect(cli.rendered_directory).to eq(render_directory)
       end
@@ -89,8 +89,8 @@ RSpec.describe Invoca::KubernetesTemplates::CLI do
       end
 
       it "returns a configured TemplateDirectoryRenderer" do
-        renderer = instance_double(Invoca::KubernetesTemplates::TemplateDirectoryRenderer)
-        expect(Invoca::KubernetesTemplates::TemplateDirectoryRenderer).to receive(:new)
+        renderer = instance_double(KubernetesTemplateRendering::TemplateDirectoryRenderer)
+        expect(KubernetesTemplateRendering::TemplateDirectoryRenderer).to receive(:new)
                                                .with(
                                                  directories: [template_directory_option],
                                                  rendered_directory: render_directory

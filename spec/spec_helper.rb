@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "invoca/kubernetes_templates"
+require "kubernetes_template_rendering"
 
 Dir[File.expand_path("./support/**/*.rb", __dir__)].each { |f| require f }
 
