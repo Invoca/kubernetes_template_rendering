@@ -1,0 +1,9 @@
+site_name: "Kubernetes Template Rendering Gem"
+site_description: "A light weight gem used to render Kubernetes manifest templates written in Jsonnet and ERB"
+
+nav:
+- Introduction: README.md
+- Change Log: CHANGELOG.md
+
+plugins:
+  - techdocs-core
