@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: kubernetes_template_rendering
+  annotations:
+    github.com/project-slug: invoca/kubernetes_template_rendering
+spec:
+  type: other
+  lifecycle: unknown
+  owner: octothorpe
