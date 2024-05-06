@@ -12,9 +12,10 @@ module KubernetesTemplateRendering
   class ResourceSet
     attr_reader :variables, :output_directory, :deploy_group_config, :omitted_resources,
                 :template_directory, :target_output_directory, :regions, :colors,
-                :definitions_path, :kubernetes_cluster_type
+                :definitions_path, :kubernetes_cluster_type, :variable_overrides,
+                :source_repo
 
-    def initialize(config:, template_directory:, rendered_directory:, definitions_path:, kubernetes_cluster_type:)
+    def initialize(config:, template_directory:, rendered_directory:, definitions_path:, kubernetes_cluster_type:, variable_overrides: {}, source_repo: nil)
       @variables               = config["variables"] || {}
       @deploy_group_config     = config["deploy_groups"]
       @omitted_resources       = config["omitted_resources"]
@@ -25,6 +26,8 @@ module KubernetesTemplateRendering
       @rendered_directory      = rendered_directory
       @definitions_path        = definitions_path
       @kubernetes_cluster_type = kubernetes_cluster_type
+      @variable_overrides      = variable_overrides
+      @source_repo             = source_repo
       @resources               = {}
 
       if @kubernetes_cluster_type != "kube-platform"
@@ -185,7 +188,7 @@ module KubernetesTemplateRendering
 
     def standard_resources(output_directory)
       standard_template_paths.map do |path|
-        Resource.new(template_path: path, definitions_path: @definitions_path, variables: variables, output_directory: output_directory)
+        Resource.new(template_path: path, definitions_path:, variables:, output_directory:, variable_overrides:, source_repo:)
       end
     end
 

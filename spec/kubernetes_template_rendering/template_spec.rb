@@ -9,7 +9,7 @@ RSpec.describe KubernetesTemplateRendering::Template do
   let(:hash)               { { "a" => "value1", "b" => "value2" } }
   let(:erb)                { "<%= a %> <%= b %>" }
   let(:source_repo)        { nil }
-  let(:variable_overrides) { nil }
+  let(:variable_overrides) { {} }
   let(:klass)              { KubernetesTemplateRendering::ErbTemplate }
 
   describe "#render" do
@@ -219,9 +219,11 @@ RSpec.describe KubernetesTemplateRendering::Template do
 
     it "creates the template object and calls render on it" do
       template_double = instance_double(klass)
-      expect(klass).to receive(:new)
-                                   .with(path, hash)
-                                   .and_return(template_double)
+      expect(klass).to(
+        receive(:new)
+          .with(path, hash, source_repo:, variable_overrides:)
+          .and_return(template_double)
+      )
       expect(template_double).to receive(:render)
       template_render
     end

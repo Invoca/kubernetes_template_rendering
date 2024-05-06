@@ -9,14 +9,16 @@ module KubernetesTemplateRendering
   class Resource
     class UnexpectedFileTypeError < StandardError; end
 
-    attr_reader :variables, :template_path, :output_directory
+    attr_reader :variables, :variable_overrides, :template_path, :output_directory, :source_repo
 
-    def initialize(template_path:, definitions_path:, variables:, output_directory:, output_filename: nil)
-      @template_path    = template_path
-      @definitions_path = definitions_path
-      @variables        = variables
-      @output_directory = output_directory
-      @output_filename  = output_filename || template_filename(template_path)
+    def initialize(template_path:, definitions_path:, variables:, output_directory:, output_filename: nil, variable_overrides: {}, source_repo: nil)
+      @template_path      = template_path
+      @definitions_path   = definitions_path
+      @variables          = variables
+      @variable_overrides = variable_overrides
+      @output_directory   = output_directory
+      @source_repo        = source_repo
+      @output_filename    = output_filename || template_filename(template_path)
     end
 
     def render(args)
@@ -26,7 +28,7 @@ module KubernetesTemplateRendering
     private
 
     def rendered_template(args)
-      @rendered_template ||= template_klass.render(@template_path, variables, jsonnet_library_path: args.jsonnet_library_path)
+      @rendered_template ||= template_klass.render(@template_path, variables, variable_overrides:, source_repo:, jsonnet_library_path: args.jsonnet_library_path)
     end
 
     def write_template(args)

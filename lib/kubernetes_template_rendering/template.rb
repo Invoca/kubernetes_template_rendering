@@ -12,7 +12,7 @@ module KubernetesTemplateRendering
 
     def initialize(template_path, variables, source_repo: nil, variable_overrides: {})
       @template_path      = template_path
-      @variables          = variables
+      @variables          = variables.merge(variable_overrides)
       @source_repo        = source_repo
       @variable_overrides = variable_overrides
     end
@@ -62,8 +62,8 @@ module KubernetesTemplateRendering
       # The ErbTemplate and JsonnetTemplate classes both inherit from the Template class and implement a render method.
       # However, the erb_binding parameter is used just in ErbTemplate, while the jsonnet_library_path parameter is used just in JsonnetTemplate.
       # This is a little awkward. Potentially this could be refactored.
-      def render(template_path, variables, erb_binding: nil, jsonnet_library_path: nil)
-        new(template_path, variables).render(erb_binding: erb_binding, jsonnet_library_path: jsonnet_library_path)
+      def render(template_path, variables, erb_binding: nil, jsonnet_library_path: nil, source_repo: nil, variable_overrides: {})
+        new(template_path, variables, source_repo:, variable_overrides:).render(erb_binding: erb_binding, jsonnet_library_path: jsonnet_library_path)
       end
     end
   end

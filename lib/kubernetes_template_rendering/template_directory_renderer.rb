@@ -13,9 +13,9 @@ module KubernetesTemplateRendering
   class TemplateDirectoryRenderer
     DEFINITIONS_FILENAME = "definitions.yaml"
 
-    attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color, :variable_overrides
+    attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color, :variable_overrides, :source_repo
 
-    def initialize(directories:, rendered_directory:, omitted_names: [], cluster_type: nil, region: nil, color: nil, variable_overrides: nil)
+    def initialize(directories:, rendered_directory:, omitted_names: [], cluster_type: nil, region: nil, color: nil, variable_overrides: nil, source_repo: nil)
       @directories        = directories_with_definitions(Array(directories))
       @omitted_names      = Array(omitted_names)
       @rendered_directory = rendered_directory
@@ -23,6 +23,7 @@ module KubernetesTemplateRendering
       @region             = region
       @color              = color
       @variable_overrides = variable_overrides || {}
+      @source_repo        = source_repo
     end
 
     def render(args)
@@ -102,7 +103,15 @@ module KubernetesTemplateRendering
           kubernetes_cluster_type = name.sub('SPP-PLACEHOLDER', 'staging').sub(/\..*/, '') # prod.gcp => prod
 
           hash[name] ||= []
-          hash[name] << ResourceSet.new(config: config, template_directory: dir, rendered_directory: @rendered_directory, kubernetes_cluster_type: kubernetes_cluster_type, definitions_path: definitions_path)
+          hash[name] << ResourceSet.new(
+            config: config,
+            template_directory: dir,
+            rendered_directory: @rendered_directory,
+            kubernetes_cluster_type: kubernetes_cluster_type,
+            definitions_path: definitions_path,
+            variable_overrides: @variable_overrides,
+            source_repo: @source_repo
+          )
         end
       end
     end
@@ -156,7 +165,6 @@ module KubernetesTemplateRendering
 
           cluster_type_config.regions   = cluster_type_config.regions & [region] if region
           cluster_type_config.colors    = cluster_type_config.colors & [color]   if color
-          cluster_type_config.variables = (cluster_type_config.variables || {}).merge(variable_overrides)
 
           hash[name] = cluster_type_config if (region.nil? && color.nil?) || (cluster_type_config.regions.any? && cluster_type_config.colors.any?)
         end

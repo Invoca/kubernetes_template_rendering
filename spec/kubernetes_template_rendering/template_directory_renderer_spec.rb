@@ -31,9 +31,19 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
       resource_set = instance_double(KubernetesTemplateRendering::ResourceSet)
 
       expect(resource_set).to receive(:render)
-      expect(KubernetesTemplateRendering::ResourceSet).to receive(:new)
-                             .with(config: expected_config, rendered_directory: rendered_directory, template_directory: template_directory, definitions_path: definitions_path, kubernetes_cluster_type: expected_kubernetes_cluster_type)
-                             .and_return(resource_set)
+      expect(KubernetesTemplateRendering::ResourceSet).to(
+        receive(:new)
+          .with(
+            config: expected_config,
+            rendered_directory: rendered_directory,
+            template_directory: template_directory,
+            definitions_path: definitions_path,
+            kubernetes_cluster_type: expected_kubernetes_cluster_type,
+            variable_overrides: {},
+            source_repo: nil
+          )
+          .and_return(resource_set)
+      )
 
       dir_renderer.render(args)
     end
