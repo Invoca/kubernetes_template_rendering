@@ -4,6 +4,13 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - Unreleased
+## [0.2.0] - Unreleased
+### Added
+- Added support for passing `--source-repo` flag into command line so that the rendered manifest comments can include a link to the source repository.
+
+### Changed
+- Updated the code comment to include the variable overrides used when rendering the current version of the templates
+
+## [0.1.0] - 2024-04-22
 
 - Initial release
