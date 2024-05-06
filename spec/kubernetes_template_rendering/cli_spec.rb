@@ -97,7 +97,8 @@ RSpec.describe KubernetesTemplateRendering::CLI do
                                                  color: nil,
                                                  region: nil,
                                                  cluster_type: nil,
-                                                 variable_overrides: nil
+                                                 variable_overrides: nil,
+                                                 source_repo: nil
                                                )
                                                .and_return(renderer)
 

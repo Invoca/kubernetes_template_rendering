@@ -12,7 +12,8 @@ module KubernetesTemplateRendering
       :region,
       :color,
       :variable_overrides,
-      :prune
+      :prune,
+      :source_repo
     ) do
       def valid?
         rendered_directory && template_directory
