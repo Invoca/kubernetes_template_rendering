@@ -113,7 +113,7 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
         standard.each do |path|
           resource = instance_double(KubernetesTemplateRendering::Resource)
           expect(KubernetesTemplateRendering::Resource).to receive(:new)
-                                .with(template_path: path, definitions_path: definitions_path, variables: variables, output_directory: expanded_output_directory)
+                                .with(template_path: path, definitions_path: definitions_path, variables: variables, output_directory: expanded_output_directory, variable_overrides: {}, source_repo: nil)
                                 .and_return(resource)
           expect(resource).to receive(:render)
         end

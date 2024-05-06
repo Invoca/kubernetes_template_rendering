@@ -32,6 +32,7 @@ module KubernetesTemplateRendering
           op.on("--region=REGION",                             "set the specific region to render")                                   { args.region = _1 }
           op.on("--color=COLOR",                               "set the specific color to render")                                    { args.color = _1 }
           op.on("--[no-]prune",                                "enable/disable pruning of untouched resources")                       { args.prune = _1 }
+          op.on("--source-repo=SOURCE_REPO",                   "set the source repo for the rendered templates")                      { args.source_repo = _1 }
 
           op.on("--variable-override=KEY:VALUE", "override a variable value set within definitions.yaml") do |override|
             args.variable_overrides ||= {}
@@ -64,7 +65,8 @@ module KubernetesTemplateRendering
           cluster_type: args.cluster_type,
           region: args.region,
           color: args.color,
-          variable_overrides: args.variable_overrides
+          variable_overrides: args.variable_overrides,
+          source_repo: args.source_repo
         )
       end
 

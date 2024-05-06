@@ -29,7 +29,7 @@ RSpec.describe KubernetesTemplateRendering::Resource do
   shared_examples "resource render" do
     it "writes the rendered template to the specified file" do
       template_output = "rendered output"
-      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render).with(template_path, variables, {jsonnet_library_path: jsonnet_library_path}).and_return(template_output)
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render).with(template_path, variables, jsonnet_library_path: jsonnet_library_path, variable_overrides: {}, source_repo: nil).and_return(template_output)
 
       expect(File).to receive(:write).with("dir/#{expected_filename}", template_output)
 
