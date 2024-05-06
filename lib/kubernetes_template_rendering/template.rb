@@ -34,7 +34,7 @@ module KubernetesTemplateRendering
 
     def full_template_path
       if source_repo
-        "https://github.com/#{source_repo}/blob/master/#{template_path.start_with?("/") ? template_path[1..-1] : template_path}"
+        "https://github.com/#{source_repo}/blob/-/#{template_path.start_with?("/") ? template_path[1..-1] : template_path}"
       else
         template_path
       end
