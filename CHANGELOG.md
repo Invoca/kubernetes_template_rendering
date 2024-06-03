@@ -4,6 +4,10 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - Unreleased
+### Fixed
+- Fixed a bug allowing child process errors to be ignored while rendering.
+
 ## [0.2.0] - 2024-05-06
 ### Added
 - Added support for passing `--source-repo` flag into command line so that the rendered manifest comments can include a link to the source repository.

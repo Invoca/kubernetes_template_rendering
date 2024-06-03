@@ -49,7 +49,11 @@ module KubernetesTemplateRendering
       end
 
       if args.fork?
-        Process.waitall
+        process_statuses = Process.waitall
+
+        if (failed_processes = process_statuses.select { |_, status| !status.success? }).any?
+          raise "Child process completed with non-zero status: #{failed_processes.inspect}"
+        end
       end
     end
 
