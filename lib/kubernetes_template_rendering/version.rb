@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
 module KubernetesTemplateRendering
-  VERSION = "0.2.1.pre.dc.3"
+  VERSION = "0.2.1.pre.dc.4"
 end

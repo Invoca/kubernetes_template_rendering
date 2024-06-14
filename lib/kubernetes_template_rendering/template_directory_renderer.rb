@@ -72,10 +72,12 @@ module KubernetesTemplateRendering
         rescue SystemCallError # this will happen if they all exited before we called waitpid
         end
         child_pids.delete_if do |pid|
-          [_, exit_status] = Process.waitpid2(pid, Process::WNOHANG)
-          exit_status.success? or raise "Child process #{pid} failed"
-        rescue Errno::ECHILD # No child processes
-          true
+          begin
+            [_, exit_status] = Process.waitpid2(pid, Process::WNOHANG)
+            exit_status.success? or raise "Child process #{pid} failed"
+          rescue Errno::ECHILD # No child processes
+            true
+          end
         end
       end
     end
