@@ -40,7 +40,7 @@ module KubernetesTemplateRendering
             else
               # this is the child
               render_set(args, resource_set)
-              Kernel.exit!(3) # skip at_exit handlers since parent will run those
+              Kernel.exit!(0) # skip at_exit handlers since parent will run those
             end
           else
             render_set(args, resource_set)
@@ -72,7 +72,8 @@ module KubernetesTemplateRendering
         rescue SystemCallError # this will happen if they all exited before we called waitpid
         end
         child_pids.delete_if do |pid|
-          Process.waitpid(pid, Process::WNOHANG)
+          [_, exit_status] = Process.waitpid2(pid, Process::WNOHANG)
+          exit_status.success? or raise "Child process #{pid} failed"
         rescue Errno::ECHILD # No child processes
           true
         end
