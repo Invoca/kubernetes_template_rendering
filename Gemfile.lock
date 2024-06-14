@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    kubernetes_template_rendering (0.2.1.pre.dc.4)
+    kubernetes_template_rendering (0.2.1.pre.dc.5)
       activesupport
       invoca-utils
       jsonnet

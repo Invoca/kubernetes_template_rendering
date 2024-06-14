@@ -73,7 +73,7 @@ module KubernetesTemplateRendering
         end
         child_pids.delete_if do |pid|
           begin
-            [_, exit_status] = Process.waitpid2(pid, Process::WNOHANG)
+            _, exit_status = Process.waitpid2(pid, Process::WNOHANG)
             exit_status.success? or raise "Child process #{pid} failed"
           rescue Errno::ECHILD # No child processes
             true
