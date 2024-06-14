@@ -40,7 +40,7 @@ module KubernetesTemplateRendering
             else
               # this is the child
               render_set(args, resource_set)
-              Kernel.exit!(0) # skip at_exit handlers since parent will run those
+              Kernel.exit!(3) # skip at_exit handlers since parent will run those
             end
           else
             render_set(args, resource_set)
