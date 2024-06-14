@@ -68,13 +68,16 @@ module KubernetesTemplateRendering
     def wait_if_max_forked(child_pids)
       while child_pids.size >= MAX_FORKED_PROCESSES
         begin
-          Process.waitpid # this is a race condition because 1 or more processes could exit before we get here
+          pid, exit_status = Process.waitpid2 # this is a race condition because 1 or more processes could exit before we get here
+          exit_status.success? or raise "Child process #{pid} failed"
         rescue SystemCallError # this will happen if they all exited before we called waitpid
         end
         child_pids.delete_if do |pid|
           begin
             _, exit_status = Process.waitpid2(pid, Process::WNOHANG)
-            exit_status.success? or raise "Child process #{pid} failed"
+            if exit_status
+              exit_status.success? or raise "Child process #{pid} failed"
+            end
           rescue Errno::ECHILD # No child processes
             true
           end
