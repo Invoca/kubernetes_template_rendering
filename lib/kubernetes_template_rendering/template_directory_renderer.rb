@@ -28,6 +28,7 @@ module KubernetesTemplateRendering
 
     def render(args)
       child_pids = []
+      failed_processes = [] # [[pid, status]]
 
       resource_sets.each do |name, resource_sets|
         puts "Rendering templates for definition #{Color.red(name)}..."
@@ -36,7 +37,7 @@ module KubernetesTemplateRendering
             if (pid = Process.fork)
               # this is the parent
               child_pids << pid
-              wait_if_max_forked(child_pids)
+              wait_if_max_forked(child_pids, failed_processes)
             else
               # this is the child
               render_set(args, resource_set)
@@ -49,9 +50,11 @@ module KubernetesTemplateRendering
       end
 
       if args.fork?
-        process_statuses = Process.waitall
+        Process.waitall.each do |pid, status|
+          status.success? or failed_processes << [pid, status]
+        end
 
-        if (failed_processes = process_statuses.select { |_, status| !status.success? }).any?
+        if failed_processes.any?
           raise "Child process completed with non-zero status: #{failed_processes.inspect}"
         end
       end
@@ -65,18 +68,18 @@ module KubernetesTemplateRendering
 
     MAX_FORKED_PROCESSES = 9
 
-    def wait_if_max_forked(child_pids)
+    def wait_if_max_forked(child_pids, failed_processes)
       while child_pids.size >= MAX_FORKED_PROCESSES
         begin
           pid, exit_status = Process.waitpid2 # this is a race condition because 1 or more processes could exit before we get here
-          exit_status.success? or raise "Child process #{pid} failed"
+          exit_status.success? or failed_processes << [pid, exit_status]
         rescue SystemCallError # this will happen if they all exited before we called waitpid
         end
         child_pids.delete_if do |pid|
           begin
             _, exit_status = Process.waitpid2(pid, Process::WNOHANG)
-            if exit_status
-              exit_status.success? or raise "Child process #{pid} failed"
+            if exit_status && !exit_status.success?
+              failed_processes << [pid, exit_status]
             end
           rescue Errno::ECHILD # No child processes
             true
