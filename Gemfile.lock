@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    kubernetes_template_rendering (0.2.0)
+    kubernetes_template_rendering (0.2.1)
       activesupport
       invoca-utils
       jsonnet
@@ -51,7 +51,8 @@ GEM
     rainbow (3.1.1)
     rake (13.2.1)
     regexp_parser (2.9.0)
-    rexml (3.2.6)
+    rexml (3.3.0)
+      strscan
     rspec (3.13.0)
       rspec-core (~> 3.13.0)
       rspec-expectations (~> 3.13.0)
@@ -85,6 +86,7 @@ GEM
       simplecov_json_formatter (~> 0.1)
     simplecov-html (0.12.3)
     simplecov_json_formatter (0.1.4)
+    strscan (3.1.0)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
     unicode-display_width (2.5.0)

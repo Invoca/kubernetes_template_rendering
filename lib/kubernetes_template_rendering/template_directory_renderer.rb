@@ -28,6 +28,7 @@ module KubernetesTemplateRendering
 
     def render(args)
       child_pids = []
+      failed_processes = [] # [[pid, status]]
 
       resource_sets.each do |name, resource_sets|
         puts "Rendering templates for definition #{Color.red(name)}..."
@@ -36,11 +37,11 @@ module KubernetesTemplateRendering
             if (pid = Process.fork)
               # this is the parent
               child_pids << pid
-              wait_if_max_forked(child_pids)
+              wait_if_max_forked(child_pids, failed_processes)
             else
               # this is the child
               render_set(args, resource_set)
-              Kernel.exit! # skip at_exit handlers since parent will run those
+              Kernel.exit!(0) # skip at_exit handlers since parent will run those
             end
           else
             render_set(args, resource_set)
@@ -49,7 +50,13 @@ module KubernetesTemplateRendering
       end
 
       if args.fork?
-        Process.waitall
+        Process.waitall.each do |pid, status|
+          status.success? or failed_processes << [pid, status]
+        end
+
+        if failed_processes.any?
+          raise "Child process completed with non-zero status: #{failed_processes.inspect}"
+        end
       end
     end
 
@@ -61,16 +68,22 @@ module KubernetesTemplateRendering
 
     MAX_FORKED_PROCESSES = 9
 
-    def wait_if_max_forked(child_pids)
+    def wait_if_max_forked(child_pids, failed_processes)
       while child_pids.size >= MAX_FORKED_PROCESSES
         begin
-          Process.waitpid # this is a race condition because 1 or more processes could exit before we get here
+          pid, exit_status = Process.waitpid2 # this is a race condition because 1 or more processes could exit before we get here
+          exit_status.success? or failed_processes << [pid, exit_status]
         rescue SystemCallError # this will happen if they all exited before we called waitpid
         end
         child_pids.delete_if do |pid|
-          Process.waitpid(pid, Process::WNOHANG)
-        rescue Errno::ECHILD # No child processes
-          true
+          begin
+            _, exit_status = Process.waitpid2(pid, Process::WNOHANG)
+            if exit_status && !exit_status.success?
+              failed_processes << [pid, exit_status]
+            end
+          rescue Errno::ECHILD # No child processes
+            true
+          end
         end
       end
     end
