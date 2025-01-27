@@ -27,6 +27,7 @@ metadata:
   - ruby
   - gem
   - executable
+  - private
 spec:
   type: library
   lifecycle: production
