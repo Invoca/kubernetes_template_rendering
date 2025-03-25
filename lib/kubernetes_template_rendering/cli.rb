@@ -34,9 +34,12 @@ module KubernetesTemplateRendering
           op.on("--[no-]prune",                                "enable/disable pruning of untouched resources")                       { args.prune = _1 }
           op.on("--source-repo=SOURCE_REPO",                   "set the source repo for the rendered templates")                      { args.source_repo = _1 }
 
-          op.on("--variable-override=KEY:VALUE", "override a variable value set within definitions.yaml") do |override|
-            args.variable_overrides ||= {}
-            args.variable_overrides.merge!(Hash[[override.split(":", 2)]])
+          op.on("--variable-override=KEY:VALUE", "override a variable value set within definitions.yaml", Array) do |overrides|
+            args.variable_overrides ||= {} # Initialize as a Hash
+            overrides.each do |override|
+              key, value = override.split(":", 2)
+              args.variable_overrides[key] = value if key && value
+            end
           end
 
           op.on("-h", "--help") do
