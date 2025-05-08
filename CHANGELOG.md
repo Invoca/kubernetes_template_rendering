@@ -4,6 +4,10 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - UNRELEASED
+### Fixed
+- Fixed `--prune` to properly remove files in the rendered directory
+
 ## [0.2.3] - 2025-03-25
 ### Fixed
 - Fixed `--variable-override` to accept multiple arguments to override multiple variables
