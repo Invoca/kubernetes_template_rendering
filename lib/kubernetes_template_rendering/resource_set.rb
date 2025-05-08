@@ -178,7 +178,7 @@ module KubernetesTemplateRendering
           The `prune` flag is set to true, #{Color.green('pruning')} directory #{Color.magenta(directory)} before rendering
 
         MESSAGE
-        FileUtils.rm_rf("#{directory}/*")
+        FileUtils.rm_rf(directory)
       end
     end
 

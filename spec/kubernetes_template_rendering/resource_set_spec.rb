@@ -74,7 +74,7 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
 
         it "prunes the directory" do
           expect(FileUtils).to_not receive(:mkdir_p)
-          expect(FileUtils).to receive(:rm_rf).with("#{expanded_output_directory}/*")
+          expect(FileUtils).to receive(:rm_rf).with(expanded_output_directory)
           resource_set.render(args)
         end
       end
