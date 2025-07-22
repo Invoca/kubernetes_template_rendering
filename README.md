@@ -7,12 +7,14 @@ configuration for various deployment environments.
 ## Installation
 
 Install the gem and add to the application's Gemfile by executing:
-```
+
+```bash
 bundle add kubernetes_template_rendering
 ```
 
 If bundler is not being used to manage dependencies, install the gem by executing:
-```
+
+```bash
 gem install kubernetes_template_rendering
 ```
 
@@ -23,6 +25,7 @@ To use this gem you can either install it, and use the `render_kubernetes_templa
 `gem exec` to execute the command without first installing the gem.
 
 ### Example Usage
+
 ```bash
 gem exec -g kubernetes_template_rendering render_templates \
     --jsonnet-library-path deployment/vendor \
@@ -33,6 +36,7 @@ gem exec -g kubernetes_template_rendering render_templates \
 ### Options
 
 To see a full list of options and how to use them, run the following command:
+
 ```bash
 gem exec -g kubernetes_template_rendering render_templates --help
 ```
@@ -45,4 +49,4 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/invoca/kubernetes_template_rendering.
+Bug reports and pull requests are welcome on GitHub at <https://github.com/invoca/kubernetes_template_rendering>.
