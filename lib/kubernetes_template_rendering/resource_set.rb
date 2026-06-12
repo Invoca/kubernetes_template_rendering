@@ -90,6 +90,7 @@ module KubernetesTemplateRendering
       # https://github.com/Invoca/process_settings-production/blob/main/settings/region_discovery/production_regions.yml
       "us-east-1"    => ['aws', "AWS-us-east-1"],
       "us-east-2"    => ['aws', "AWS-us-east-2"],
+      "us-west-2"    => ['aws', "AWS-us-west-2"],
       "us-central1"  => ['gcp', "GCE-us-central1"],
       "us-west2"     => ['gcp', "GCE-us-west2"],
       "eu-central-1" => ['aws', "AWS-eu-central-1"],
@@ -113,6 +114,11 @@ module KubernetesTemplateRendering
         "primary" => "us-east-2a",
         "secondary" => "us-east-2b",
         "tertiary" => "us-east-2c"
+      },
+      "us-west-2" => {
+        "primary" => "us-west-2a",
+        "secondary" => "us-west-2b",
+        "tertiary" => "us-west-2c"
       },
       "us-central1" => {
         "primary" => "us-central1-a",
