@@ -4,6 +4,10 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-06-12
+### Added
+- Added `us-west-2` (AWS) to region mappings for the new us-west-2 production cluster
+
 ## [0.2.5] - 2025-05-08
 ### Fixed
 - Updated `rexml` dependency to avoid security issues
