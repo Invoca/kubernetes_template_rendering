@@ -16,3 +16,4 @@ gem "simplecov"
 gem "pry"
 
 gem "logger"
+gem "benchmark"
