@@ -14,3 +14,5 @@ gem "rubocop", "~> 1.21"
 gem "simplecov"
 
 gem "pry"
+
+gem "logger"
