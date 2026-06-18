@@ -5,6 +5,7 @@ require 'active_support/core_ext' # for deep_merge
 require 'invoca/utils'
 require 'yaml'
 require_relative 'resource_set'
+require_relative 'reconciler'
 require 'set'
 
 # This class points to a collection of template directories to render, and a rendered_directory to render into.
@@ -27,6 +28,11 @@ module KubernetesTemplateRendering
     end
 
     def render(args)
+      if args.reconcile?
+        sweep_scopes = collect_reconcile_scopes # validates out-of-prefix before any writes
+        reconciler   = Reconciler.new(@rendered_directory) # marker captured before rendering/forking
+      end
+
       child_pids = []
       failed_processes = [] # [[pid, status]]
 
@@ -58,9 +64,25 @@ module KubernetesTemplateRendering
           raise "Child process completed with non-zero status: #{failed_processes.inspect}"
         end
       end
+
+      reconcile_sweep(reconciler, sweep_scopes) if args.reconcile?
     end
 
     private
+
+    # Collects the unique base sweep roots across all rendered resource sets and validates that each
+    # stays within rendered_directory (out-of-prefix, full or relative `..`, is a hard error).
+    def collect_reconcile_scopes
+      scopes = resource_sets.values.flatten.flat_map(&:reconcile_scopes)
+      scopes.each { |scope| Reconciler.validate_within_scope!(scope[:base_root], @rendered_directory) }
+      scopes.map { |scope| scope[:base_root] }.uniq
+    end
+
+    def reconcile_sweep(reconciler, sweep_roots)
+      sweep_roots.each { |root| reconciler.sweep!(root: root, fences: [File.join(root, "spp")]) }
+    ensure
+      reconciler.finish!
+    end
 
     def read_definitions(path)
       File.read(path)

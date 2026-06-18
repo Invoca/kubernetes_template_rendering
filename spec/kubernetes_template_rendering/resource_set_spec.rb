@@ -100,6 +100,44 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
     end
   end
 
+  describe "#reconcile_scopes" do
+    let(:directory_in_config) { "%{plain_region}/%{type}/%{color}/staging-ops" }
+    let(:config) do
+      {
+        "directory" => directory_in_config,
+        "variables" => variables,
+        "regions" => ["us-east-1", "us-east-2"],
+        "colors" => ["orange", "blue"]
+      }
+    end
+
+    it "uses the output directory's parent as the base root, for each region x color" do
+      expect(resource_set.reconcile_scopes).to contain_exactly(
+        { base_root: File.join(rendered_directory, "us-east-1", "prod", "orange"), output_directory: File.join(rendered_directory, "us-east-1/prod/orange/staging-ops") },
+        { base_root: File.join(rendered_directory, "us-east-1", "prod", "blue"),   output_directory: File.join(rendered_directory, "us-east-1/prod/blue/staging-ops") },
+        { base_root: File.join(rendered_directory, "us-east-2", "prod", "orange"), output_directory: File.join(rendered_directory, "us-east-2/prod/orange/staging-ops") },
+        { base_root: File.join(rendered_directory, "us-east-2", "prod", "blue"),   output_directory: File.join(rendered_directory, "us-east-2/prod/blue/staging-ops") }
+      )
+    end
+
+    context "when the directory pattern omits cluster_type/color (e.g. <region>/<service>)" do
+      let(:directory_in_config) { "%{plain_region}/transaction-events" }
+
+      it "derives the base root from the actual rendered parent, not a fixed layout" do
+        expect(resource_set.reconcile_scopes).to contain_exactly(
+          { base_root: File.join(rendered_directory, "us-east-1"), output_directory: File.join(rendered_directory, "us-east-1/transaction-events") },
+          { base_root: File.join(rendered_directory, "us-east-1"), output_directory: File.join(rendered_directory, "us-east-1/transaction-events") },
+          { base_root: File.join(rendered_directory, "us-east-2"), output_directory: File.join(rendered_directory, "us-east-2/transaction-events") },
+          { base_root: File.join(rendered_directory, "us-east-2"), output_directory: File.join(rendered_directory, "us-east-2/transaction-events") }
+        )
+      end
+    end
+
+    it "does not mutate variables" do
+      expect { resource_set.reconcile_scopes }.to_not(change { resource_set.variables })
+    end
+  end
+
   describe "render" do
     def expand_paths(paths)
       paths.map { |path| File.expand_path(File.join(template_directory, path)) }

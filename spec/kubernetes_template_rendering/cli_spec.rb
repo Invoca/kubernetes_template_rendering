@@ -79,6 +79,48 @@ RSpec.describe KubernetesTemplateRendering::CLI do
     end
   end
 
+  describe "--reconcile flag" do
+    let(:options) { [render_option, "--reconcile", template_directory_option] }
+
+    before do
+      FileUtils.mkdir(template_directory_option) rescue nil
+      FileUtils.touch(File.join(template_directory_option, described_class::DEFINITIONS_FILENAME))
+    end
+
+    it "sets reconcile to true on the parsed args" do
+      _renderer, args = described_class.send(:parse, options)
+      expect(args.reconcile?).to be(true)
+    end
+
+    context "with --no-reconcile" do
+      let(:options) { [render_option, "--no-reconcile", template_directory_option] }
+
+      it "sets reconcile to false" do
+        _renderer, args = described_class.send(:parse, options)
+        expect(args.reconcile?).to be(false)
+      end
+    end
+
+    context "when omitted" do
+      let(:options) { [render_option, template_directory_option] }
+
+      it "defaults reconcile to false" do
+        _renderer, args = described_class.send(:parse, options)
+        expect(args.reconcile?).to be(false)
+      end
+    end
+
+    context "when combined with --prune" do
+      let(:expect_system_exit) { true }
+      let(:options) { [render_option, "--reconcile", "--prune", template_directory_option] }
+
+      it "exits with a mutually-exclusive error" do
+        expect(STDERR).to receive(:puts).with(/mutually exclusive/)
+        expect { described_class.send(:parse, options) }.to raise_exception(SystemExit)
+      end
+    end
+  end
+
   context "when a template directory name is passed" do
     let(:options) { [render_option, template_directory_option] }
 

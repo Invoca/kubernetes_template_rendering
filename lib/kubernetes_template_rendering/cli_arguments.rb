@@ -13,7 +13,8 @@ module KubernetesTemplateRendering
       :color,
       :variable_overrides,
       :prune,
-      :source_repo
+      :source_repo,
+      :reconcile
     ) do
       def valid?
         rendered_directory && template_directory
@@ -29,6 +30,10 @@ module KubernetesTemplateRendering
 
       def prune?
         !!prune
+      end
+
+      def reconcile?
+        !!reconcile
       end
 
       def render_files?

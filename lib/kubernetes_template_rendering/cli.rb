@@ -32,6 +32,7 @@ module KubernetesTemplateRendering
           op.on("--region=REGION",                             "set the specific region to render")                                   { args.region = _1 }
           op.on("--color=COLOR",                               "set the specific color to render")                                    { args.color = _1 }
           op.on("--[no-]prune",                                "enable/disable pruning of untouched resources")                       { args.prune = _1 }
+          op.on("--[no-]reconcile",                            "bounded post-render sweep of stale resources")                        { args.reconcile = _1 }
           op.on("--source-repo=SOURCE_REPO",                   "set the source repo for the rendered templates")                      { args.source_repo = _1 }
 
           op.on("--variable-override=KEY:VALUE", "override a variable value set within definitions.yaml", Array) do |overrides|
@@ -53,6 +54,11 @@ module KubernetesTemplateRendering
 
         unless args.valid?
           STDERR.puts(parser)
+          exit(1)
+        end
+
+        if args.reconcile? && args.prune?
+          STDERR.puts("--reconcile and --prune are mutually exclusive")
           exit(1)
         end
 

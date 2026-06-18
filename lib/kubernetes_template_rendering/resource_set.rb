@@ -65,6 +65,23 @@ module KubernetesTemplateRendering
       end
     end
 
+    # Bounded reconcile scope roots for this entry, one per region × color.
+    #
+    # The sweep root is the parent directory of the entry's rendered `output_directory`, derived
+    # from the actual `directory:` pattern rather than assuming a fixed layout. For a
+    # `.../<service>` pattern that parent is the `<region>/<cluster_type>/<color>` base; for a
+    # `<region>/<service>` pattern it is `<region>`. The parent is shared with sibling entries, so
+    # leftovers from a deleted/renamed entry under it are swept. The renderer validates each
+    # `base_root` stays within `rendered_directory` (out-of-prefix, full or relative, is a hard error).
+    def reconcile_scopes
+      @regions.flat_map do |plain_region|
+        @colors.map do |c|
+          output_directory = File.join(@rendered_directory, format(@target_output_directory, plain_region: plain_region, color: c, type: @kubernetes_cluster_type))
+          { base_root: File.dirname(output_directory), output_directory: output_directory }
+        end
+      end
+    end
+
     def render_create_directory(args, output_directory)
       prune_directory(output_directory) if args.prune?
       create_directory(output_directory)

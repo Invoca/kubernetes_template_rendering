@@ -41,6 +41,19 @@ To see a full list of options and how to use them, run the following command:
 gem exec -g kubernetes_template_rendering render_templates --help
 ```
 
+### Cleaning up stale output: `--prune` vs `--reconcile`
+
+Both flags remove output left over from templates/entries that no longer render, but they differ in how:
+
+- `--prune` deletes each entry's output directory with `rm -rf` **before** rendering. It never removes the directories of fully deleted/renamed entries and can clobber sibling directories when one entry renders at a prefix root above another.
+- `--reconcile` performs a safer, bounded sweep: it touches a marker, renders, then deletes only files older than the marker under each scope root `<region>/<cluster_type>/<color>/` (honoring `--cluster_type` / `--region` / `--color`), and finally removes any now-empty directories. This cleans up directories of deleted/renamed entries without clobbering freshly-rendered siblings, and two identical reconcile runs produce the same result.
+
+Notes:
+
+- `--reconcile` and `--prune` are mutually exclusive (passing both exits with an error).
+- `spp/` subtrees are fenced out of the sweep; deleted-SPP cleanup remains a manual `git rm` in the teardown runbook.
+- If any rendered entry resolves to a path outside its scope prefix (a full-path or relative `..` escape), reconcile hard-errors before deleting anything.
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
