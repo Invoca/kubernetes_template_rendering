@@ -17,3 +17,4 @@ gem "pry"
 
 gem "logger"
 gem "benchmark"
+gem "ostruct"

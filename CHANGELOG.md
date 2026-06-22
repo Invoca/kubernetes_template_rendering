@@ -8,9 +8,6 @@ Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0
 ### Added
 - Added `--reconcile` flag: a bounded, marker-based sweep that replaces the destructive per-entry `rm -rf` of `--prune`. It touches a marker before rendering, then after rendering deletes only files older than the marker under each scope root (`<region>/<cluster_type>/<color>/`) and removes empty directories, correctly cleaning up directories of deleted/renamed entries. `spp/` subtrees are fenced out of the sweep, paths resolving outside their scope prefix raise a hard error, and `--reconcile` combined with `--prune` is rejected.
 
-### Fixed
-- Added `ostruct` and `logger` as explicit gem dependencies for Ruby 4.0 compatibility, where both were removed from the default standard library
-
 ## [0.2.5] - 2025-05-08
 ### Fixed
 - Updated `rexml` dependency to avoid security issues
