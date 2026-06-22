@@ -37,5 +37,4 @@ Gem::Specification.new do |spec|
   spec.add_dependency "activesupport", "< 8"
   spec.add_dependency "jsonnet"
   spec.add_dependency "invoca-utils"
-  spec.add_dependency "ostruct"
 end
