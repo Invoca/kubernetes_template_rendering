@@ -3,6 +3,7 @@
 require 'active_support'
 require 'active_support/core_ext' # for deep_merge
 require 'invoca/utils'
+require 'pathname'
 require 'yaml'
 require_relative 'resource_set'
 require_relative 'reconciler'
@@ -13,6 +14,7 @@ require 'set'
 module KubernetesTemplateRendering
   class TemplateDirectoryRenderer
     DEFINITIONS_FILENAME = "definitions.yaml"
+    SPP_FENCE_DIRNAME = "spp"
 
     attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color, :variable_overrides, :source_repo
 
@@ -71,15 +73,22 @@ module KubernetesTemplateRendering
     private
 
     # Collects the unique base sweep roots across all rendered resource sets and validates that each
-    # stays within rendered_directory (out-of-prefix, full or relative `..`, is a hard error).
+    # stays within rendered_directory (out-of-prefix, full or relative `..`, is a hard error). Roots
+    # that live inside an `spp/` subtree are dropped: deleted-SPP cleanup is a manual `git rm` per the
+    # ticket, and an SPP entry renders into `<base>/spp/<spp-name>`, so its computed base root is the
+    # `spp` directory itself -- which the per-root `spp` child fence cannot protect.
     def collect_reconcile_scopes
       scopes = resource_sets.values.flatten.flat_map(&:reconcile_scopes)
       scopes.each { |scope| Reconciler.validate_within_scope!(scope[:base_root], @rendered_directory) }
-      scopes.map { |scope| scope[:base_root] }.uniq
+      scopes.map { |scope| scope[:base_root] }.reject { |root| within_spp_subtree?(root) }.uniq
+    end
+
+    def within_spp_subtree?(root)
+      Pathname.new(root).relative_path_from(Pathname.new(@rendered_directory)).each_filename.include?(SPP_FENCE_DIRNAME)
     end
 
     def reconcile_sweep(reconciler, sweep_roots)
-      sweep_roots.each { |root| reconciler.sweep!(root: root, fences: [File.join(root, "spp")]) }
+      sweep_roots.each { |root| reconciler.sweep!(root: root, fences: [File.join(root, SPP_FENCE_DIRNAME)]) }
     ensure
       reconciler.finish!
     end

@@ -125,5 +125,17 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
 
       expect(File.exist?(spp_file)).to be(true)
     end
+
+    it "does not sweep an SPP entry whose directory renders into spp/<spp-name>" do
+      write_template_dir("SPP-PLACEHOLDER" => "%{plain_region}/staging/%{color}/spp/SPP-PLACEHOLDER")
+      stale_spp_file = File.join(rendered_directory, "local/staging/orange/spp/SPP-PLACEHOLDER/old.yaml")
+      FileUtils.mkdir_p(File.dirname(stale_spp_file))
+      File.write(stale_spp_file, "stale")
+      age(stale_spp_file)
+
+      render!
+
+      expect(File.exist?(stale_spp_file)).to be(true)
+    end
   end
 end
