@@ -103,6 +103,61 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
     end
   end
 
+  describe "non-standard directory layout warning" do
+    subject(:warnings) do
+      captured = []
+      allow_any_instance_of(described_class).to receive(:puts) { |_instance, *msgs| captured.concat(msgs) }
+      described_class.new(config: warning_config,
+                          rendered_directory: rendered_directory,
+                          template_directory: template_directory,
+                          definitions_path: definitions_path,
+                          kubernetes_cluster_type: "prod")
+      captured.join("\n")
+    end
+
+    let(:directory_value) { nil }
+    let(:subdirectory_value) { nil }
+    let(:warning_config) do
+      {
+        "regions" => ["us-east-1"],
+        "colors" => ["orange"]
+      }.tap do |cfg|
+        cfg["directory"]    = directory_value    if directory_value
+        cfg["subdirectory"] = subdirectory_value if subdirectory_value
+      end
+    end
+
+    context "when directory does not follow the base layout" do
+      let(:directory_value) { "../some-cluster/%{plain_region}-render-here" }
+
+      it "warns about the non-standard layout" do
+        expect(warnings).to include("does not match the standard")
+      end
+    end
+
+    context "when directory follows the base layout" do
+      let(:directory_value) { "%{plain_region}/%{type}/%{color}/staging-ops" }
+
+      it "does not warn" do
+        expect(warnings).to_not include("does not match")
+      end
+    end
+
+    context "when subdirectory is used" do
+      let(:subdirectory_value) { "my-app" }
+
+      it "does not warn" do
+        expect(warnings).to_not include("does not match")
+      end
+    end
+
+    context "when neither directory nor subdirectory is given" do
+      it "does not warn" do
+        expect(warnings).to_not include("does not match")
+      end
+    end
+  end
+
   describe "rendering with subdirectory" do
     subject(:resource_set) do
       described_class.new(config: subdirectory_config,

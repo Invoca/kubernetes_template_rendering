@@ -100,12 +100,24 @@ module KubernetesTemplateRendering
       if directory && subdirectory
         raise ArgumentError, "specify only one of 'directory:' or 'subdirectory:' in #{({ 'directory' => directory, 'subdirectory' => subdirectory }).inspect}"
       elsif directory
+        warn_nonstandard_directory_layout(directory)
         directory
       elsif subdirectory
         File.join(BASE_OUTPUT_DIRECTORY, subdirectory)
       else
         BASE_OUTPUT_DIRECTORY
       end
+    end
+
+    # `directory:` is a legacy escape hatch. Warn when it does not render into the
+    # standard "%{plain_region}/%{type}/%{color}/" layout, since non-standard paths
+    # are deprecated and cannot be safely reconciled (see ADR-0001).
+    def warn_nonstandard_directory_layout(directory)
+      return if directory == BASE_OUTPUT_DIRECTORY || directory.start_with?("#{BASE_OUTPUT_DIRECTORY}/")
+
+      puts Color.brown("WARNING: #{@template_directory}: `directory: #{directory}` does not match the standard " \
+                       "#{BASE_OUTPUT_DIRECTORY}/ layout. Non-standard paths are deprecated and unsafe for --reconcile; " \
+                       "prefer `subdirectory:` or the base-path default.")
     end
 
     CLOUD_REGION_TO_PROVIDER_AND_DATACENTER = {
