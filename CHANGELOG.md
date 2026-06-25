@@ -7,7 +7,7 @@ Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0
 ## [0.4.0] - 2026-06-25
 ### Added
 - Added a `subdirectory:` option to `definitions.yaml`. It is mutually exclusive with `directory:` and sets the output path to the base path `%{plain_region}/%{type}/%{color}/<subdirectory>`. When neither `directory:` nor `subdirectory:` is given, output is rendered to the base path `%{plain_region}/%{type}/%{color}` (previously a missing `directory:` raised an error).
-- Emit a warning when a `directory:` pattern does not follow the standard `%{plain_region}/%{type}/%{color}/` layout. Non-standard paths are deprecated and unsafe for the planned `--reconcile` stale-resource deletion; prefer `subdirectory:` or the base-path default. See ADR-0001.
+- Emit a deprecation warning on any use of `directory:` in `definitions.yaml`, suggesting to remove it (to render into the standard `%{plain_region}/%{type}/%{color}` layout) or switch to `subdirectory:`. `directory:` is the only way to produce a non-standard path, which is unsafe for the planned `--reconcile` stale-resource deletion. See ADR-0001.
 
 ## [0.3.0] - 2026-06-24
 ### Fixed

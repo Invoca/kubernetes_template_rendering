@@ -45,7 +45,7 @@ Rendered output paths MUST be derived from `plain_region`, the kubernetes cluste
 
 Because the base-path and `subdirectory` outputs are deterministic and rooted under the `region/type/color` tree, the renderer owns a predictable, enumerable set of directories. That is the property that lets `--reconcile` compute the desired set, diff it against what is on disk, and delete only the stale entries — safely and without escaping the tree.
 
-Additionally, the freeform `directory:` field is **deprecated**. It remains supported for backward compatibility, but it is the only way to produce a non-conforming (or tree-escaping) path, so new definitions should use `subdirectory:` or the base-path default. As a first step, the renderer now **warns** when a `directory:` pattern does not follow the standard `%{plain_region}/%{type}/%{color}/` layout, steering authors toward the conforming forms. A subsequent follow-up will upgrade this to hard validation that rejects `directory:` patterns which escape the rendered tree (absolute paths or paths containing `..`), closing the remaining gap so that even legacy usage cannot break reconcile safety. **(Rejection not yet enforced — currently warn-only.)**
+Additionally, the freeform `directory:` field is **deprecated**. It remains supported for backward compatibility, but it is the only way to produce a non-conforming (or tree-escaping) path, so new definitions should use `subdirectory:` or the base-path default. As a first step, the renderer now **warns on any use of `directory:`**, suggesting authors remove it (to render into the standard `%{plain_region}/%{type}/%{color}` layout) or switch to `subdirectory:`. A subsequent follow-up will upgrade this to hard validation/removal so that legacy usage cannot break reconcile safety. **(Rejection not yet enforced — currently warn-only.)**
 
 ### Positive Consequences
 
@@ -56,7 +56,7 @@ Additionally, the freeform `directory:` field is **deprecated**. It remains supp
 ### Negative Consequences
 
 * **Behavior change:** a missing `directory:` no longer raises; it now renders to the base path. The previous "missing `directory:`" error is gone.
-* `directory:` non-conformance is currently only a warning, not an error, so until the follow-up hard validation lands the reconcile-safety guarantee is not yet airtight.
+* Use of `directory:` is currently only a warning, not an error, so until the follow-up hard validation lands the reconcile-safety guarantee is not yet airtight.
 * Deprecating `directory:` requires migrating existing definitions over time.
 
 ## Pros and Cons of the Options

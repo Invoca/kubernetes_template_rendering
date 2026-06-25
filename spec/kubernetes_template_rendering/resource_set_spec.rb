@@ -103,7 +103,7 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
     end
   end
 
-  describe "non-standard directory layout warning" do
+  describe "directory deprecation warning" do
     subject(:warnings) do
       captured = []
       allow_any_instance_of(described_class).to receive(:puts) { |_instance, *msgs| captured.concat(msgs) }
@@ -127,19 +127,19 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
       end
     end
 
-    context "when directory does not follow the base layout" do
+    context "when directory is used with a non-standard layout" do
       let(:directory_value) { "../some-cluster/%{plain_region}-render-here" }
 
-      it "warns about the non-standard layout" do
-        expect(warnings).to include("does not match the standard")
+      it "warns that directory is deprecated" do
+        expect(warnings).to include("`directory:` is deprecated")
       end
     end
 
-    context "when directory follows the base layout" do
+    context "when directory is used with the standard layout" do
       let(:directory_value) { "%{plain_region}/%{type}/%{color}/staging-ops" }
 
-      it "does not warn" do
-        expect(warnings).to_not include("does not match")
+      it "still warns that directory is deprecated" do
+        expect(warnings).to include("`directory:` is deprecated")
       end
     end
 
@@ -147,13 +147,13 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
       let(:subdirectory_value) { "my-app" }
 
       it "does not warn" do
-        expect(warnings).to_not include("does not match")
+        expect(warnings).to_not include("deprecated")
       end
     end
 
     context "when neither directory nor subdirectory is given" do
       it "does not warn" do
-        expect(warnings).to_not include("does not match")
+        expect(warnings).to_not include("deprecated")
       end
     end
   end
