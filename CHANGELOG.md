@@ -4,6 +4,10 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-25
+### Added
+- Added a `subdirectory:` option to `definitions.yaml`. It is mutually exclusive with `directory:` and sets the output path to the base path `%{plain_region}/%{type}/%{color}/<subdirectory>`. When neither `directory:` nor `subdirectory:` is given, output is rendered to the base path `%{plain_region}/%{type}/%{color}` (previously a missing `directory:` raised an error).
+
 ## [0.3.0] - 2026-06-24
 ### Fixed
 - Ruby 4.0 compatibility: declare `ostruct` as a dependency (it is `require`d directly but was removed from Ruby's default gems in 4.0.0) and bump `activesupport` to `7.2.3.1` so its `logger` dependency is resolved (`logger` was likewise dropped from default gems).

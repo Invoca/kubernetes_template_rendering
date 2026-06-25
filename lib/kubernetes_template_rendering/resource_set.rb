@@ -5,7 +5,10 @@ require_relative "deploy_grouped_resource"
 
 # This class points to the resources in a given template_directory for a given kubernetes_cluster_type like 'ops' or 'prod' or 'ci'.
 # `config` contains the definitions found in `definitions_path`.
-#   The most important config is "directory" which is a pattern like "%{region}/%{type}/%{color}/staging-ops".
+#   The output directory is resolved from the mutually-exclusive "directory" and "subdirectory" config:
+#     "directory"    is a full pattern like "%{plain_region}/%{type}/%{color}/staging-ops".
+#     "subdirectory" is a literal final segment appended to the base path -> "%{plain_region}/%{type}/%{color}/<subdirectory>".
+#     when neither is given, output goes to the base path "%{plain_region}/%{type}/%{color}".
 #   The config "regions", "colors" are the sets of regions and colors to render for.
 # It renders into `rendered_directory`.
 module KubernetesTemplateRendering
@@ -20,7 +23,7 @@ module KubernetesTemplateRendering
       @deploy_group_config     = config["deploy_groups"]
       @omitted_resources       = config["omitted_resources"]
       @template_directory      = template_directory
-      @target_output_directory = config["directory"] or raise ArgumentError, "missing 'directory:' in #{config.inspect}"
+      @target_output_directory = resolve_target_output_directory(config["directory"], config["subdirectory"])
       @regions                 = config["regions"] || []
       @colors                  = config["colors"] || []
       @rendered_directory      = rendered_directory
@@ -84,6 +87,26 @@ module KubernetesTemplateRendering
     end
 
     private
+
+    # The output-directory pattern is resolved from the mutually-exclusive
+    # `directory:` and `subdirectory:` config fields:
+    #   directory only    -> the directory pattern, verbatim
+    #   subdirectory only -> "%{plain_region}/%{type}/%{color}/<subdirectory>"
+    #   neither           -> "%{plain_region}/%{type}/%{color}" (base path)
+    #   both              -> ArgumentError
+    BASE_OUTPUT_DIRECTORY = File.join("%{plain_region}", "%{type}", "%{color}")
+
+    def resolve_target_output_directory(directory, subdirectory)
+      if directory && subdirectory
+        raise ArgumentError, "specify only one of 'directory:' or 'subdirectory:' in #{({ 'directory' => directory, 'subdirectory' => subdirectory }).inspect}"
+      elsif directory
+        directory
+      elsif subdirectory
+        File.join(BASE_OUTPUT_DIRECTORY, subdirectory)
+      else
+        BASE_OUTPUT_DIRECTORY
+      end
+    end
 
     CLOUD_REGION_TO_PROVIDER_AND_DATACENTER = {
       # Note: The names below should match RegionDiscovery from process_settings-production.
