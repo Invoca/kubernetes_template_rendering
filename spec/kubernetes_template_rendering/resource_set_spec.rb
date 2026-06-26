@@ -50,6 +50,146 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
     allow(FileUtils).to receive(:mkdir_p).with(output_directory)
   end
 
+  describe "output directory pattern resolution" do
+    subject(:target_output_directory) do
+      described_class.new(config: resolution_config,
+                          rendered_directory: rendered_directory,
+                          template_directory: template_directory,
+                          definitions_path: definitions_path,
+                          kubernetes_cluster_type: "prod").target_output_directory
+    end
+
+    let(:directory_value) { nil }
+    let(:subdirectory_value) { nil }
+    let(:resolution_config) do
+      {
+        "regions" => ["us-east-1"],
+        "colors" => ["orange"]
+      }.tap do |cfg|
+        cfg["directory"]    = directory_value    if directory_value
+        cfg["subdirectory"] = subdirectory_value if subdirectory_value
+      end
+    end
+
+    context "with directory only" do
+      let(:directory_value) { "custom/%{plain_region}/path" }
+
+      it "uses the directory pattern verbatim" do
+        expect(target_output_directory).to eq("custom/%{plain_region}/path")
+      end
+    end
+
+    context "with subdirectory only" do
+      let(:subdirectory_value) { "my-app" }
+
+      it "builds the base path with the subdirectory appended" do
+        expect(target_output_directory).to eq("%{plain_region}/%{type}/%{color}/my-app")
+      end
+    end
+
+    context "with neither directory nor subdirectory" do
+      it "uses the base path" do
+        expect(target_output_directory).to eq("%{plain_region}/%{type}/%{color}")
+      end
+    end
+
+    context "with both directory and subdirectory" do
+      let(:directory_value) { "custom/%{plain_region}/path" }
+      let(:subdirectory_value) { "my-app" }
+
+      it "raises ArgumentError" do
+        expect { target_output_directory }.to raise_error(ArgumentError, /only one of 'directory:' or 'subdirectory:'/)
+      end
+    end
+  end
+
+  describe "directory deprecation warning" do
+    subject(:warnings) do
+      captured = []
+      allow_any_instance_of(described_class).to receive(:puts) { |_instance, *msgs| captured.concat(msgs) }
+      described_class.new(config: warning_config,
+                          rendered_directory: rendered_directory,
+                          template_directory: template_directory,
+                          definitions_path: definitions_path,
+                          kubernetes_cluster_type: "prod")
+      captured.join("\n")
+    end
+
+    let(:directory_value) { nil }
+    let(:subdirectory_value) { nil }
+    let(:warning_config) do
+      {
+        "regions" => ["us-east-1"],
+        "colors" => ["orange"]
+      }.tap do |cfg|
+        cfg["directory"]    = directory_value    if directory_value
+        cfg["subdirectory"] = subdirectory_value if subdirectory_value
+      end
+    end
+
+    context "when directory is used with a non-standard layout" do
+      let(:directory_value) { "../some-cluster/%{plain_region}-render-here" }
+
+      it "warns that directory is deprecated" do
+        expect(warnings).to include("`directory:` is deprecated")
+      end
+    end
+
+    context "when directory is used with the standard layout" do
+      let(:directory_value) { "%{plain_region}/%{type}/%{color}/staging-ops" }
+
+      it "still warns that directory is deprecated" do
+        expect(warnings).to include("`directory:` is deprecated")
+      end
+    end
+
+    context "when subdirectory is used" do
+      let(:subdirectory_value) { "my-app" }
+
+      it "does not warn" do
+        expect(warnings).to_not include("deprecated")
+      end
+    end
+
+    context "when neither directory nor subdirectory is given" do
+      it "does not warn" do
+        expect(warnings).to_not include("deprecated")
+      end
+    end
+  end
+
+  describe "rendering with subdirectory" do
+    subject(:resource_set) do
+      described_class.new(config: subdirectory_config,
+                          rendered_directory: rendered_directory,
+                          template_directory: template_directory,
+                          definitions_path: definitions_path,
+                          kubernetes_cluster_type: "prod")
+    end
+    let(:subdirectory_config) do
+      {
+        "subdirectory" => "my-app",
+        "variables" => variables,
+        "regions" => ["us-east-1"],
+        "colors" => ["orange"]
+      }
+    end
+    let(:expected_directory) { File.join(rendered_directory, "us-east-1", "prod", "orange", "my-app") }
+
+    before do
+      resource = instance_double(KubernetesTemplateRendering::Resource)
+      allow(resource).to receive(:render)
+      allow(KubernetesTemplateRendering::Resource).to receive(:new).and_return(resource)
+      allow(File).to receive(:exist?).with(expected_directory).and_return(false)
+      allow(FileUtils).to receive(:mkdir_p)
+    end
+
+    it "renders into region/cluster_type/color/subdirectory" do
+      expect(FileUtils).to receive(:mkdir_p).with(expected_directory)
+      resource_set.render(args)
+    end
+  end
+
   describe "output directory" do
     before do
       resource = instance_double(KubernetesTemplateRendering::Resource)
