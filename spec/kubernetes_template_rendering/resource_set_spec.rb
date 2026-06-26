@@ -130,12 +130,14 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
                           rendered_directory: rendered_directory,
                           template_directory: template_directory,
                           definitions_path: definitions_path,
-                          kubernetes_cluster_type: "prod")
+                          kubernetes_cluster_type: "prod",
+                          spp: spp_value)
       captured.join("\n")
     end
 
     let(:directory_value) { nil }
     let(:subdirectory_value) { nil }
+    let(:spp_value) { false }
     let(:warning_config) do
       {
         "regions" => ["us-east-1"],
@@ -173,6 +175,15 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
     context "when neither directory nor subdirectory is given" do
       it "does not warn" do
         expect(warnings).to_not include("deprecated")
+      end
+    end
+
+    context "when directory is used by an SPP definition" do
+      let(:spp_value) { true }
+      let(:directory_value) { "custom/%{plain_region}/spp-path" }
+
+      it "suggests the SPP base layout" do
+        expect(warnings).to include("spp/SPP-PLACEHOLDER")
       end
     end
   end

@@ -126,7 +126,7 @@ module KubernetesTemplateRendering
     # which is unsafe for --reconcile stale-resource deletion (see ADR-0001). Warn on any use.
     def warn_directory_deprecated(directory)
       puts Color.brown("WARNING: #{@template_directory}: `directory:` is deprecated. " \
-                       "Remove it to render into the standard #{BASE_OUTPUT_DIRECTORY} layout, " \
+                       "Remove it to render into the standard #{base_output_directory} layout, " \
                        "or use `subdirectory:` instead. (got `directory: #{directory}`)")
     end
 
