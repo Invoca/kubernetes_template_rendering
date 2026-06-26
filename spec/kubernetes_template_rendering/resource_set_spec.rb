@@ -56,9 +56,11 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
                           rendered_directory: rendered_directory,
                           template_directory: template_directory,
                           definitions_path: definitions_path,
-                          kubernetes_cluster_type: "prod").target_output_directory
+                          kubernetes_cluster_type: "prod",
+                          spp: spp_value).target_output_directory
     end
 
+    let(:spp_value) { false }
     let(:directory_value) { nil }
     let(:subdirectory_value) { nil }
     let(:resolution_config) do
@@ -99,6 +101,23 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
 
       it "raises ArgumentError" do
         expect { target_output_directory }.to raise_error(ArgumentError, /only one of 'directory:' or 'subdirectory:'/)
+      end
+    end
+
+    context "for an SPP definition with neither directory nor subdirectory" do
+      let(:spp_value) { true }
+
+      it "uses the SPP base path" do
+        expect(target_output_directory).to eq("%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER")
+      end
+    end
+
+    context "for an SPP definition with subdirectory only" do
+      let(:spp_value) { true }
+      let(:subdirectory_value) { "my-app" }
+
+      it "appends the subdirectory under the SPP base path" do
+        expect(target_output_directory).to eq("%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER/my-app")
       end
     end
   end
