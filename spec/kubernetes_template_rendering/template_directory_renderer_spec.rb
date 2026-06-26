@@ -21,7 +21,12 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
     FileUtils.rm_r(template_directory)
   end
 
-  { "test": "test", "prod.gcp": "prod", "SPP-PLACEHOLDER": "staging", "SPP-PLACEHOLDER.eu": "staging" }.each do |resource_definition_name, expected_kubernetes_cluster_type|
+  {
+    "test"               => { cluster_type: "test",    spp: false },
+    "prod.gcp"           => { cluster_type: "prod",    spp: false },
+    "SPP-PLACEHOLDER"    => { cluster_type: "staging", spp: true },
+    "SPP-PLACEHOLDER.eu" => { cluster_type: "staging", spp: true }
+  }.each do |resource_definition_name, expected|
     it "builds a ResourceSet with an appropriate kubernetes_cluster_type for each directory and calls render on it" do
       definition = build_definition(name: resource_definition_name.to_s, rendered_directory: rendered_directory, template_directory: template_directory, variables: variables)
       definitions_path = File.join(template_directory, described_class::DEFINITIONS_FILENAME)
@@ -38,7 +43,8 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
             rendered_directory: rendered_directory,
             template_directory: template_directory,
             definitions_path: definitions_path,
-            kubernetes_cluster_type: expected_kubernetes_cluster_type,
+            kubernetes_cluster_type: expected[:cluster_type],
+            spp: expected[:spp],
             variable_overrides: {},
             source_repo: nil
           )
