@@ -4,6 +4,10 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-26
+### Added
+- SPP definitions (those whose name contains the `SPP-PLACEHOLDER` token) now render under a derived base path `%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER`, with `subdirectory:` composing on top. This keeps each SPP instance's output distinct and bounded under the `region/type/color` tree for `--reconcile`, and preserves the literal `SPP-PLACEHOLDER` token for downstream per-instance substitution. The `directory:` deprecation warning now points SPP definitions at the SPP base layout. See ADR-0001.
+
 ## [0.4.0] - 2026-06-25
 ### Added
 - Added a `subdirectory:` option to `definitions.yaml`. It is mutually exclusive with `directory:` and sets the output path to the base path `%{plain_region}/%{type}/%{color}/<subdirectory>`. When neither `directory:` nor `subdirectory:` is given, output is rendered to the base path `%{plain_region}/%{type}/%{color}` (previously a missing `directory:` raised an error).
