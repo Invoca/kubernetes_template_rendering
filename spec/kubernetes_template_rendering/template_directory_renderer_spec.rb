@@ -28,11 +28,11 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
     "SPP-PLACEHOLDER.eu" => { cluster_type: "staging", spp: true }
   }.each do |resource_definition_name, expected|
     it "builds a ResourceSet with an appropriate kubernetes_cluster_type for each directory and calls render on it" do
-      definition = build_definition(name: resource_definition_name.to_s, rendered_directory: rendered_directory, template_directory: template_directory, variables: variables)
+      definition = build_definition(name: resource_definition_name, rendered_directory: rendered_directory, template_directory: template_directory, variables: variables)
       definitions_path = File.join(template_directory, described_class::DEFINITIONS_FILENAME)
       File.write(definitions_path, definition.to_yaml)
 
-      expected_config = OpenStruct.new(definition[resource_definition_name.to_s])
+      expected_config = OpenStruct.new(definition[resource_definition_name])
       resource_set = instance_double(KubernetesTemplateRendering::ResourceSet)
 
       expect(resource_set).to receive(:render)
