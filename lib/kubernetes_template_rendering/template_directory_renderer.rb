@@ -113,7 +113,8 @@ module KubernetesTemplateRendering
         config.map do |name, config|
           next if omitted_names.include?(name)
 
-          kubernetes_cluster_type = name.sub('SPP-PLACEHOLDER', 'staging').sub(/\..*/, '') # prod.gcp => prod
+          kubernetes_cluster_type = name.sub(ResourceSet::SPP_PLACEHOLDER, 'staging').sub(/\..*/, '') # prod.gcp => prod
+          spp = name.include?(ResourceSet::SPP_PLACEHOLDER)
 
           hash[name] ||= []
           hash[name] << ResourceSet.new(
@@ -121,6 +122,7 @@ module KubernetesTemplateRendering
             template_directory: dir,
             rendered_directory: @rendered_directory,
             kubernetes_cluster_type: kubernetes_cluster_type,
+            spp: spp,
             definitions_path: definitions_path,
             variable_overrides: @variable_overrides,
             source_repo: @source_repo
@@ -173,7 +175,7 @@ module KubernetesTemplateRendering
       end
 
       expand_config(config).each_with_object({}) do |(name, data), hash|
-        if !cluster_type || cluster_type == name.sub('SPP-PLACEHOLDER', 'staging').sub(/\..*/, '') # prod.gcp => prod
+        if !cluster_type || cluster_type == name.sub(ResourceSet::SPP_PLACEHOLDER, 'staging').sub(/\..*/, '') # prod.gcp => prod
           cluster_type_config = OpenStruct.new(data)
 
           cluster_type_config.regions   = cluster_type_config.regions & [region] if region

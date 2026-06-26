@@ -38,10 +38,22 @@ Rendered output paths MUST be derived from `plain_region`, the kubernetes cluste
 |---|---|
 | `directory` only | the `directory` value, verbatim (legacy / escape hatch) |
 | `subdirectory` only | `%{plain_region}/%{type}/%{color}/<subdirectory>` |
+| `subdirectory` only, SPP definition | `%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER/<subdirectory>` |
+| neither, SPP definition | `%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER` |
 | neither | `%{plain_region}/%{type}/%{color}` (base path) |
 | both | error (`ArgumentError`) |
 
 `subdirectory:` is a plain literal final segment appended to the base path — no `%{...}` interpolation is performed on the value itself. The resolved pattern still flows through the existing per-region/color `format(...)` step, so e.g. `subdirectory: my-app` with region `us-east-1`, cluster type `prod`, and color `orange` renders into `us-east-1/prod/orange/my-app`. When neither field is given, output goes to the base path (previously a missing `directory:` raised an error).
+
+Definitions whose name contains the `SPP-PLACEHOLDER` token (the same token from
+which the `staging` cluster type is derived) render under an additional
+`spp/SPP-PLACEHOLDER` segment: their base path is
+`%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER`, and `subdirectory:` composes
+on top of it. The `spp/SPP-PLACEHOLDER` segment is literal (not substituted by
+`format`), so the token survives into the rendered tree for downstream per-instance
+substitution while remaining bounded under the `region/type/color` tree. The
+warn-only-then-reject rollout for non-conforming `directory:` applies equally to SPP
+definitions.
 
 Because the base-path and `subdirectory` outputs are deterministic and rooted under the `region/type/color` tree, the renderer owns a predictable, enumerable set of directories. That is the property that lets `--reconcile` compute the desired set, diff it against what is on disk, and delete only the stale entries — safely and without escaping the tree.
 

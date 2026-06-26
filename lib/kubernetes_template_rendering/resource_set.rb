@@ -18,7 +18,8 @@ module KubernetesTemplateRendering
                 :definitions_path, :kubernetes_cluster_type, :variable_overrides,
                 :source_repo
 
-    def initialize(config:, template_directory:, rendered_directory:, definitions_path:, kubernetes_cluster_type:, variable_overrides: {}, source_repo: nil)
+    def initialize(config:, template_directory:, rendered_directory:, definitions_path:, kubernetes_cluster_type:, spp: false, variable_overrides: {}, source_repo: nil)
+      @spp                     = spp
       @variables               = config["variables"] || {}
       @deploy_group_config     = config["deploy_groups"]
       @omitted_resources       = config["omitted_resources"]
@@ -92,9 +93,15 @@ module KubernetesTemplateRendering
     # `directory:` and `subdirectory:` config fields:
     #   directory only    -> the directory pattern, verbatim
     #   subdirectory only -> "%{plain_region}/%{type}/%{color}/<subdirectory>"
-    #   neither           -> "%{plain_region}/%{type}/%{color}" (base path)
+    #   neither           -> base path; "%{plain_region}/%{type}/%{color}", or the SPP base
+    #                        "%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER" for SPP definitions
     #   both              -> ArgumentError
+    SPP_PLACEHOLDER = "SPP-PLACEHOLDER"
     BASE_OUTPUT_DIRECTORY = File.join("%{plain_region}", "%{type}", "%{color}")
+    # SPP definitions render under an extra spp/SPP-PLACEHOLDER segment so each SPP
+    # instance has a distinct, bounded path and the literal token survives for
+    # downstream per-instance substitution.
+    SPP_BASE_OUTPUT_DIRECTORY = File.join(BASE_OUTPUT_DIRECTORY, "spp", SPP_PLACEHOLDER)
 
     def resolve_target_output_directory(directory, subdirectory)
       if directory && subdirectory
@@ -103,10 +110,15 @@ module KubernetesTemplateRendering
         warn_directory_deprecated(directory)
         directory
       elsif subdirectory
-        File.join(BASE_OUTPUT_DIRECTORY, subdirectory)
+        File.join(base_output_directory, subdirectory)
       else
-        BASE_OUTPUT_DIRECTORY
+        base_output_directory
       end
+    end
+
+    # SPP definitions render under SPP_BASE_OUTPUT_DIRECTORY; everything else uses the standard base.
+    def base_output_directory
+      @spp ? SPP_BASE_OUTPUT_DIRECTORY : BASE_OUTPUT_DIRECTORY
     end
 
     # `directory:` is a deprecated legacy escape hatch. It is the only way to produce a
@@ -114,7 +126,7 @@ module KubernetesTemplateRendering
     # which is unsafe for --reconcile stale-resource deletion (see ADR-0001). Warn on any use.
     def warn_directory_deprecated(directory)
       puts Color.brown("WARNING: #{@template_directory}: `directory:` is deprecated. " \
-                       "Remove it to render into the standard #{BASE_OUTPUT_DIRECTORY} layout, " \
+                       "Remove it to render into the standard #{base_output_directory} layout, " \
                        "or use `subdirectory:` instead. (got `directory: #{directory}`)")
     end
 
