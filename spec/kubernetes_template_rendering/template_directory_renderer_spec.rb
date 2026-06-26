@@ -24,6 +24,7 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
   {
     "test"               => { cluster_type: "test",    spp: false },
     "prod.gcp"           => { cluster_type: "prod",    spp: false },
+    "staging"            => { cluster_type: "staging", spp: false },
     "SPP-PLACEHOLDER"    => { cluster_type: "staging", spp: true },
     "SPP-PLACEHOLDER.eu" => { cluster_type: "staging", spp: true }
   }.each do |resource_definition_name, expected|
