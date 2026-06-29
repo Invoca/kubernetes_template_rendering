@@ -1,11 +1,7 @@
 PATH
   remote: .
   specs:
-<<<<<<< HEAD
-    kubernetes_template_rendering (0.3.0)
-=======
-    kubernetes_template_rendering (0.4.0)
->>>>>>> main
+    kubernetes_template_rendering (0.5.0)
       activesupport (< 8)
       invoca-utils
       jsonnet
