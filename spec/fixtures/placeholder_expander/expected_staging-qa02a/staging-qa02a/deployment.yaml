@@ -1,0 +1,10 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-staging-qa02a
+  namespace: staging-qa02a
+  labels:
+    platform: staging-qa02a
+    tags: staging,qa02a
+spec:
+  replicas: 1
