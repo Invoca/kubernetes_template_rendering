@@ -5,6 +5,7 @@ require 'active_support/core_ext' # for deep_merge
 require 'invoca/utils'
 require 'yaml'
 require_relative 'resource_set'
+require 'set'
 
 # This class points to a collection of template directories to render, and a rendered_directory to render into.
 # Optionally, some of the template directories may be omitted by including them in `omitted_names`.
@@ -13,10 +14,10 @@ module KubernetesTemplateRendering
     DEFINITIONS_FILENAME = "definitions.yaml"
 
     attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color,
-                :variable_overrides, :source_repo, :spps
+                :variable_overrides, :source_repo, :spps, :only
 
     def initialize(directories:, rendered_directory:, omitted_names: [], cluster_type: nil, region: nil, color: nil,
-                   variable_overrides: nil, source_repo: nil, spps: [])
+                   variable_overrides: nil, source_repo: nil, spps: [], only: [])
       @directories        = directories_with_definitions(Array(directories))
       @omitted_names      = Array(omitted_names)
       @rendered_directory = rendered_directory
@@ -26,6 +27,7 @@ module KubernetesTemplateRendering
       @variable_overrides = variable_overrides || {}
       @source_repo        = source_repo
       @spps               = Array(spps)
+      @only               = Array(only)
     end
 
     def render(args)
@@ -108,29 +110,48 @@ module KubernetesTemplateRendering
     end
 
     def resource_sets
-      @resource_sets ||= @directories.each_with_object({}) do |dir, hash|
-        definitions_path = definitions_path_for_dir(dir)
-        config = load_config(definitions_path)
+      @resource_sets ||= begin
+        matched_only = Set.new
+        all_keys = Set.new
+        sets = @directories.each_with_object({}) do |dir, hash|
+          definitions_path = definitions_path_for_dir(dir)
+          config = load_config(definitions_path)
 
-        config.map do |name, config|
-          next if omitted_names.include?(name)
+          config.each_key { |name| all_keys << name }
 
-          kubernetes_cluster_type = name.sub(ResourceSet::SPP_PLACEHOLDER, 'staging').sub(/\..*/, '') # prod.gcp => prod
-          spp = name.include?(ResourceSet::SPP_PLACEHOLDER)
+          config.map do |name, config|
+            next if omitted_names.include?(name)
+            next if @only.any? && !@only.include?(name)
+            matched_only << name if @only.include?(name)
 
-          hash[name] ||= []
-          hash[name] << ResourceSet.new(
-            config: config,
-            template_directory: dir,
-            rendered_directory: @rendered_directory,
-            kubernetes_cluster_type: kubernetes_cluster_type,
-            spp: spp,
-            spps: @spps,
-            definitions_path: definitions_path,
-            variable_overrides: @variable_overrides,
-            source_repo: @source_repo
-          )
+            kubernetes_cluster_type = name.sub(ResourceSet::SPP_PLACEHOLDER, 'staging').sub(/\..*/, '') # prod.gcp => prod
+            spp = name.include?(ResourceSet::SPP_PLACEHOLDER)
+
+            hash[name] ||= []
+            hash[name] << ResourceSet.new(
+              config: config,
+              template_directory: dir,
+              rendered_directory: @rendered_directory,
+              kubernetes_cluster_type: kubernetes_cluster_type,
+              spp: spp,
+              spps: @spps,
+              definitions_path: definitions_path,
+              variable_overrides: @variable_overrides,
+              source_repo: @source_repo
+            )
+          end
         end
+
+        if @only.any?
+          unmatched = @only - matched_only.to_a
+          if unmatched.any?
+            raise ArgumentError,
+                  "--only values not found in any definitions.yaml entry: #{unmatched.inspect}. " \
+                  "Valid keys: #{all_keys.to_a.sort.inspect}"
+          end
+        end
+
+        sets
       end
     end
 

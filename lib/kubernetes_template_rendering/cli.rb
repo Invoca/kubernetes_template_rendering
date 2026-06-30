@@ -37,6 +37,10 @@ module KubernetesTemplateRendering
             args.spps ||= []
             args.spps << name
           end
+          op.on("--only=NAME", "render only the definitions.yaml entry with this exact top-level key (repeatable)") do |name|
+            args.only ||= []
+            args.only << name
+          end
 
           op.on("--variable-override=KEY:VALUE", "override a variable value set within definitions.yaml", Array) do |overrides|
             args.variable_overrides ||= {} # Initialize as a Hash
@@ -55,6 +59,7 @@ module KubernetesTemplateRendering
         parser.parse!(options)
         args.template_directory = options.first
         args.spps = (args.spps || []).uniq
+        args.only = (args.only || []).uniq
 
         unless args.valid?
           STDERR.puts(parser)
@@ -75,7 +80,8 @@ module KubernetesTemplateRendering
           color: args.color,
           variable_overrides: args.variable_overrides,
           source_repo: args.source_repo,
-          spps: args.spps
+          spps: args.spps,
+          only: args.only
         )
       end
 
