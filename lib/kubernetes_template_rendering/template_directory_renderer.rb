@@ -5,7 +5,6 @@ require 'active_support/core_ext' # for deep_merge
 require 'invoca/utils'
 require 'yaml'
 require_relative 'resource_set'
-require 'set'
 
 # This class points to a collection of template directories to render, and a rendered_directory to render into.
 # Optionally, some of the template directories may be omitted by including them in `omitted_names`.
@@ -13,9 +12,11 @@ module KubernetesTemplateRendering
   class TemplateDirectoryRenderer
     DEFINITIONS_FILENAME = "definitions.yaml"
 
-    attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color, :variable_overrides, :source_repo
+    attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color,
+                :variable_overrides, :source_repo, :spps
 
-    def initialize(directories:, rendered_directory:, omitted_names: [], cluster_type: nil, region: nil, color: nil, variable_overrides: nil, source_repo: nil)
+    def initialize(directories:, rendered_directory:, omitted_names: [], cluster_type: nil, region: nil, color: nil,
+                   variable_overrides: nil, source_repo: nil, spps: [])
       @directories        = directories_with_definitions(Array(directories))
       @omitted_names      = Array(omitted_names)
       @rendered_directory = rendered_directory
@@ -24,6 +25,7 @@ module KubernetesTemplateRendering
       @color              = color
       @variable_overrides = variable_overrides || {}
       @source_repo        = source_repo
+      @spps               = Array(spps)
     end
 
     def render(args)
@@ -123,6 +125,7 @@ module KubernetesTemplateRendering
             rendered_directory: @rendered_directory,
             kubernetes_cluster_type: kubernetes_cluster_type,
             spp: spp,
+            spps: @spps,
             definitions_path: definitions_path,
             variable_overrides: @variable_overrides,
             source_repo: @source_repo

@@ -6,7 +6,8 @@ require_relative "../../lib/kubernetes_template_rendering/template_directory_ren
 require_relative "../../lib/kubernetes_template_rendering/cli_arguments"
 
 RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
-  subject(:dir_renderer) { described_class.new(directories: [template_directory], rendered_directory: rendered_directory) }
+  subject(:dir_renderer) { described_class.new(directories: [template_directory], rendered_directory: rendered_directory, spps: spps) }
+  let(:spps) { ["staging-qa02a"] }
   let(:rendered_directory) { Dir.mktmpdir }
   let(:template_directory) { Dir.mktmpdir }
   let(:args) { KubernetesTemplateRendering::CLIArguments.new(rendered_directory, template_directory, false, '') }
@@ -28,7 +29,7 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
     "SPP-PLACEHOLDER"    => { cluster_type: "staging", spp: true },
     "SPP-PLACEHOLDER.eu" => { cluster_type: "staging", spp: true }
   }.each do |resource_definition_name, expected|
-    it "builds a ResourceSet with an appropriate kubernetes_cluster_type for each directory and calls render on it" do
+    it "builds a ResourceSet with spp=#{expected[:spp].inspect} and the right cluster_type for #{resource_definition_name}" do
       definition = build_definition(name: resource_definition_name, rendered_directory: rendered_directory, template_directory: template_directory, variables: variables)
       definitions_path = File.join(template_directory, described_class::DEFINITIONS_FILENAME)
       File.write(definitions_path, definition.to_yaml)
@@ -46,6 +47,7 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
             definitions_path: definitions_path,
             kubernetes_cluster_type: expected[:cluster_type],
             spp: expected[:spp],
+            spps: spps,
             variable_overrides: {},
             source_repo: nil
           )
