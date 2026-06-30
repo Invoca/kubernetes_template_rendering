@@ -29,7 +29,7 @@ To use this gem you can either install it, and use the `render_kubernetes_templa
 ```bash
 gem exec -g kubernetes_template_rendering render_templates \
     --jsonnet-library-path deployment/vendor \
-    --rendered_directory path/to/resources \
+    --rendered-directory path/to/resources \
     deployment/templates
 ```
 
@@ -40,6 +40,36 @@ To see a full list of options and how to use them, run the following command:
 ```bash
 gem exec -g kubernetes_template_rendering render_templates --help
 ```
+
+### Filtering to specific entries
+
+Pass `--only NAME` (repeatable) to render only the `definitions.yaml` entries whose top-level key exactly matches `NAME`. Composes with `--cluster_type`/`--region`/`--color`/`--spp` — all filters are AND'd.
+
+```bash
+gem exec -g kubernetes_template_rendering render_templates \
+    --rendered-directory path/to/resources \
+    --cluster_type staging \
+    --only staging.test \
+    deployment/templates
+```
+
+Useful when one `--cluster_type` matches multiple sibling entries (e.g. `staging` and `staging.test` both match `--cluster_type staging` after the suffix-strip rule) and you want to render only one of them. Repeated `--only` values are deduped.
+
+If an `--only` value matches no entry across any template directory, the gem raises with the list of valid keys so the caller can self-correct.
+
+### Staging Partial Platforms
+
+Pass `--spp NAME` (repeatable) to expand any entry whose `definitions.yaml` name contains `SPP-PLACEHOLDER` into a per-SPP sibling output. Substitutes `SPP-PLACEHOLDER` with `NAME` and the `PLACEHOLDER` suffix with the suffix of `NAME` (everything after the last `-`), in both file paths and contents. Source mtimes are preserved.
+
+```bash
+gem exec -g kubernetes_template_rendering render_templates \
+    --rendered-directory path/to/resources \
+    --spp staging-qa02a \
+    --spp staging-qa08a \
+    deployment/templates
+```
+
+This is purely additive — the placeholder-bearing output tree is still produced, and per-SPP trees are written alongside it. Repeated `--spp` values are deduped.
 
 ## Development
 
