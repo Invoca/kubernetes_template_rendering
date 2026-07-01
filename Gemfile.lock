@@ -100,10 +100,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  benchmark
   kubernetes_template_rendering!
-  logger
-  ostruct
   pry
   rake (~> 13.0)
   rspec (~> 3.0)

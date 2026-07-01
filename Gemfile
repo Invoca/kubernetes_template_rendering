@@ -14,7 +14,3 @@ gem "rubocop", "~> 1.21"
 gem "simplecov"
 
 gem "pry"
-
-gem "logger"
-gem "benchmark"
-gem "ostruct"
