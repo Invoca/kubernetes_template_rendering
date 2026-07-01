@@ -4,6 +4,11 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-26
+### Added
+- Added `--spp NAME` (repeatable) flag that expands rendered output of `SPP-PLACEHOLDER` entries into per-Staging-Partial-Platform sibling directories, substituting `SPP-PLACEHOLDER` and its `PLACEHOLDER` suffix in both paths and contents. Composes with the SPP-derived base path introduced in 0.4.0 (sibling per-SPP trees are created next to the literal `SPP-PLACEHOLDER` segment). Replaces the post-render `invocaops_docker/tools/spp-transform/spp-transform.rb` step inside the gem.
+- Added `--only NAME` (repeatable) flag that filters rendering to specific top-level `definitions.yaml` entries by exact key match. Composes with `--cluster_type`/`--region`/`--color`/`--spp` (all filters are AND'd). Raises with a list of valid keys if any `--only` value matches no entry across the rendered template directories.
+
 ## [0.4.0] - 2026-06-25
 ### Added
 - Added a `subdirectory:` option to `definitions.yaml`. It is mutually exclusive with `directory:` and sets the output path to the base path `%{plain_region}/%{type}/%{color}/<subdirectory>`. When neither `directory:` nor `subdirectory:` is given, output is rendered to the base path `%{plain_region}/%{type}/%{color}` (previously a missing `directory:` raised an error).

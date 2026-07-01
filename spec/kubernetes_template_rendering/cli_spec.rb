@@ -15,7 +15,7 @@ RSpec.describe KubernetesTemplateRendering::CLI do
     end
   end
 
-  let(:render_option) { "--render-directory=#{render_directory}" }
+  let(:render_option) { "--rendered-directory=#{render_directory}" }
   let(:templates_directory) { "/tmp/templates" }
   let(:template_directory_option) { File.join(templates_directory, "tts-service") }
   let(:help_option) { "--help" }
@@ -98,7 +98,9 @@ RSpec.describe KubernetesTemplateRendering::CLI do
                                                  region: nil,
                                                  cluster_type: nil,
                                                  variable_overrides: nil,
-                                                 source_repo: nil
+                                                 source_repo: nil,
+                                                 spps: [],
+                                                 only: []
                                                )
                                                .and_return(renderer)
 
@@ -114,6 +116,44 @@ RSpec.describe KubernetesTemplateRendering::CLI do
       it "raises an exception" do
         expect{ cli }.to raise_exception(ArgumentError, /template directory not found/)
       end
+    end
+  end
+
+  describe "--spp flag" do
+    let(:options) { [render_option, "--spp=staging-qa02a", "--spp=staging-qa08a", "--spp=staging-qa02a", template_directory_option] }
+
+    before do
+      FileUtils.mkdir_p(template_directory_option)
+      FileUtils.touch(File.join(template_directory_option, described_class::DEFINITIONS_FILENAME))
+    end
+
+    it "accumulates SPP names and deduplicates" do
+      _, args = described_class.send(:parse, options)
+      expect(args.spps).to eq(["staging-qa02a", "staging-qa08a"])
+    end
+
+    it "defaults to an empty list when not provided" do
+      _, args = described_class.send(:parse, [render_option, template_directory_option])
+      expect(args.spps).to eq([])
+    end
+  end
+
+  describe "--only flag" do
+    let(:options) { [render_option, template_directory_option] }
+
+    before do
+      FileUtils.mkdir_p(template_directory_option)
+      FileUtils.touch(File.join(template_directory_option, described_class::DEFINITIONS_FILENAME))
+    end
+
+    it "accumulates entry names and deduplicates" do
+      _, args = described_class.send(:parse, [render_option, "--only=staging", "--only=staging.test", "--only=staging", template_directory_option])
+      expect(args.only).to eq(["staging", "staging.test"])
+    end
+
+    it "defaults to an empty list when not provided" do
+      _, args = described_class.send(:parse, [render_option, template_directory_option])
+      expect(args.only).to eq([])
     end
   end
 end
