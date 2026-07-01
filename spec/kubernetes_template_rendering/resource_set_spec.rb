@@ -413,4 +413,96 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
       include_examples "render"
     end
   end
+
+  describe "SPP placeholder expansion" do
+    let(:rendered_directory) { Dir.mktmpdir }
+    let(:template_directory) { Dir.mktmpdir }
+
+    before do
+      allow(FileUtils).to receive(:mkdir_p).and_call_original
+      allow(File).to receive(:exist?).and_call_original
+    end
+
+    let(:config) do
+      {
+        "directory" => "%{plain_region}/staging/%{color}/spp/SPP-PLACEHOLDER-telephony",
+        "regions" => ["us-east-1"],
+        "colors" => ["orange"],
+        "variables" => { "namespace" => "SPP-PLACEHOLDER-telephony" }
+      }
+    end
+    let(:args) { KubernetesTemplateRendering::CLIArguments.new.tap { |a| a.fork = false } }
+
+    after do
+      FileUtils.rm_rf(rendered_directory)
+      FileUtils.rm_rf(template_directory)
+    end
+
+    it "calls PlaceholderExpander once per SPP for the rendered output directory" do
+      resource_set = described_class.new(
+        config: config,
+        template_directory: template_directory,
+        rendered_directory: rendered_directory,
+        definitions_path: File.join(template_directory, "definitions.yaml"),
+        kubernetes_cluster_type: "staging",
+        spp: true,
+        spps: ["staging-qa02a", "staging-qa08a"]
+      )
+
+      expected_output_directory = File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER-telephony")
+      allow(resource_set).to receive(:resources).and_return([])
+      allow(resource_set).to receive(:puts)
+
+      expect(KubernetesTemplateRendering::PlaceholderExpander).to receive(:expand!)
+        .with(source_directory: expected_output_directory, target_name: "staging-qa02a", placeholder_token: "SPP-PLACEHOLDER")
+      expect(KubernetesTemplateRendering::PlaceholderExpander).to receive(:expand!)
+        .with(source_directory: expected_output_directory, target_name: "staging-qa08a", placeholder_token: "SPP-PLACEHOLDER")
+
+      resource_set.render(args)
+    end
+
+    it "with --prune, wipes each per-SPP destination directory before expansion" do
+      resource_set = described_class.new(
+        config: config,
+        template_directory: template_directory,
+        rendered_directory: rendered_directory,
+        definitions_path: File.join(template_directory, "definitions.yaml"),
+        kubernetes_cluster_type: "staging",
+        spp: true,
+        spps: ["staging-qa02a"]
+      )
+
+      args.prune = true
+      per_spp_dest = File.join(rendered_directory, "us-east-1/staging/orange/spp/staging-qa02a-telephony")
+      FileUtils.mkdir_p(per_spp_dest)
+      stale_file = File.join(per_spp_dest, "stale.yaml")
+      File.write(stale_file, "old: data\n")
+
+      allow(resource_set).to receive(:resources).and_return([])
+      allow(resource_set).to receive(:puts)
+      allow(KubernetesTemplateRendering::PlaceholderExpander).to receive(:expand!)
+
+      resource_set.render(args)
+
+      expect(File.exist?(stale_file)).to be(false)
+    end
+
+    it "does not call PlaceholderExpander when spp is false" do
+      resource_set = described_class.new(
+        config: config.merge("directory" => "%{plain_region}/%{type}/%{color}/production"),
+        template_directory: template_directory,
+        rendered_directory: rendered_directory,
+        definitions_path: File.join(template_directory, "definitions.yaml"),
+        kubernetes_cluster_type: "prod",
+        spp: false,
+        spps: []
+      )
+
+      allow(resource_set).to receive(:resources).and_return([])
+      allow(resource_set).to receive(:puts)
+
+      expect(KubernetesTemplateRendering::PlaceholderExpander).not_to receive(:expand!)
+      resource_set.render(args)
+    end
+  end
 end

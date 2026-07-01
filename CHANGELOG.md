@@ -4,9 +4,15 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - 2026-06-29
+## [0.6.0] - Unreleased
 ### Added
-- Added `--reconcile` flag: a bounded, marker-based sweep that replaces the destructive per-entry `rm -rf` of `--prune`. It touches a marker before rendering, then after rendering deletes only files older than the marker under each scope root (`<region>/<cluster_type>/<color>/`) and removes empty directories, correctly cleaning up directories of deleted/renamed entries. `spp/` subtrees are fenced out of the sweep, paths resolving outside their scope prefix raise a hard error, and `--reconcile` combined with `--prune` is rejected.
+- Added `--reconcile` flag: a bounded, marker-based sweep that replaces the destructive per-entry `rm -rf` of `--prune`. It touches a marker before rendering, then after rendering deletes only files older than the marker under each scope root (`<region>/<cluster_type>/<color>/`) and removes empty directories, correctly cleaning up directories of deleted/renamed entries. `spp/` subtrees are fenced out of the base sweep, paths resolving outside their scope prefix raise a hard error, and `--reconcile` combined with `--prune` is rejected.
+- Made `--reconcile` `--spp`-aware: with `--spp NAME` the SPP sweep narrows to the requested per-SPP subtrees (substituting `SPP-PLACEHOLDER` into the sweep root), leaving `SPP-PLACEHOLDER` and unrequested SPP siblings intact; without `--spp` only the `SPP-PLACEHOLDER` subtree is swept. Rejected `--reconcile` combined with `--only`, which would delete un-rendered siblings under the shared base root. See ADR-0002.
+
+## [0.5.0] - 2026-06-26
+### Added
+- Added `--spp NAME` (repeatable) flag that expands rendered output of `SPP-PLACEHOLDER` entries into per-Staging-Partial-Platform sibling directories, substituting `SPP-PLACEHOLDER` and its `PLACEHOLDER` suffix in both paths and contents. Composes with the SPP-derived base path introduced in 0.4.0 (sibling per-SPP trees are created next to the literal `SPP-PLACEHOLDER` segment). Replaces the post-render `invocaops_docker/tools/spp-transform/spp-transform.rb` step inside the gem.
+- Added `--only NAME` (repeatable) flag that filters rendering to specific top-level `definitions.yaml` entries by exact key match. Composes with `--cluster_type`/`--region`/`--color`/`--spp` (all filters are AND'd). Raises with a list of valid keys if any `--only` value matches no entry across the rendered template directories.
 
 ## [0.4.0] - 2026-06-25
 ### Added

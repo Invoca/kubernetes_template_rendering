@@ -29,7 +29,7 @@ To use this gem you can either install it, and use the `render_kubernetes_templa
 ```bash
 gem exec -g kubernetes_template_rendering render_templates \
     --jsonnet-library-path deployment/vendor \
-    --rendered_directory path/to/resources \
+    --rendered-directory path/to/resources \
     deployment/templates
 ```
 
@@ -50,9 +50,39 @@ Both flags remove output left over from templates/entries that no longer render,
 
 Notes:
 
-- `--reconcile` and `--prune` are mutually exclusive (passing both exits with an error).
-- `spp/` subtrees are fenced out of the sweep; deleted-SPP cleanup remains a manual `git rm` in the teardown runbook.
+- `--reconcile` and `--prune` are mutually exclusive (passing both exits with an error). `--reconcile` and `--only` are likewise mutually exclusive, since a filtered render would leave un-rendered siblings looking stale under the shared base root.
+- `spp/` subtrees are fenced out of the base sweep. With `--spp NAME`, reconcile narrows the SPP sweep to the requested per-SPP subtree(s), leaving `SPP-PLACEHOLDER` and unrequested SPP siblings intact; without `--spp`, only the `SPP-PLACEHOLDER` subtree is swept. Deleted-SPP cleanup remains a manual `git rm` in the teardown runbook. See ADR-0002.
 - If any rendered entry resolves to a path outside its scope prefix (a full-path or relative `..` escape), reconcile hard-errors before deleting anything.
+
+### Filtering to specific entries
+
+Pass `--only NAME` (repeatable) to render only the `definitions.yaml` entries whose top-level key exactly matches `NAME`. Composes with `--cluster_type`/`--region`/`--color`/`--spp` — all filters are AND'd.
+
+```bash
+gem exec -g kubernetes_template_rendering render_templates \
+    --rendered-directory path/to/resources \
+    --cluster_type staging \
+    --only staging.test \
+    deployment/templates
+```
+
+Useful when one `--cluster_type` matches multiple sibling entries (e.g. `staging` and `staging.test` both match `--cluster_type staging` after the suffix-strip rule) and you want to render only one of them. Repeated `--only` values are deduped.
+
+If an `--only` value matches no entry across any template directory, the gem raises with the list of valid keys so the caller can self-correct.
+
+### Staging Partial Platforms
+
+Pass `--spp NAME` (repeatable) to expand any entry whose `definitions.yaml` name contains `SPP-PLACEHOLDER` into a per-SPP sibling output. Substitutes `SPP-PLACEHOLDER` with `NAME` and the `PLACEHOLDER` suffix with the suffix of `NAME` (everything after the last `-`), in both file paths and contents. Source mtimes are preserved.
+
+```bash
+gem exec -g kubernetes_template_rendering render_templates \
+    --rendered-directory path/to/resources \
+    --spp staging-qa02a \
+    --spp staging-qa08a \
+    deployment/templates
+```
+
+This is purely additive — the placeholder-bearing output tree is still produced, and per-SPP trees are written alongside it. Repeated `--spp` values are deduped.
 
 ## Development
 

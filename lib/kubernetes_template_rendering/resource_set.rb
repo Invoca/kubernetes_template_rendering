@@ -2,6 +2,7 @@
 
 require_relative "resource"
 require_relative "deploy_grouped_resource"
+require_relative "placeholder_expander"
 
 # This class points to the resources in a given template_directory for a given kubernetes_cluster_type like 'ops' or 'prod' or 'ci'.
 # `config` contains the definitions found in `definitions_path`.
@@ -16,9 +17,10 @@ module KubernetesTemplateRendering
     attr_reader :variables, :output_directory, :deploy_group_config, :omitted_resources,
                 :template_directory, :target_output_directory, :regions, :colors,
                 :definitions_path, :kubernetes_cluster_type, :variable_overrides,
-                :source_repo
+                :source_repo, :spps
 
-    def initialize(config:, template_directory:, rendered_directory:, definitions_path:, kubernetes_cluster_type:, spp: false, variable_overrides: {}, source_repo: nil)
+    def initialize(config:, template_directory:, rendered_directory:, definitions_path:, kubernetes_cluster_type:,
+                   spp: false, spps: [], variable_overrides: {}, source_repo: nil)
       @spp                     = spp
       @variables               = config["variables"] || {}
       @deploy_group_config     = config["deploy_groups"]
@@ -33,6 +35,7 @@ module KubernetesTemplateRendering
       @variable_overrides      = variable_overrides
       @source_repo             = source_repo
       @resources               = {}
+      @spps                    = Array(spps)
 
       if @kubernetes_cluster_type != "kube-platform"
         @target_output_directory.include?("%{plain_region}") or raise "#{@template_directory}: target_output_directory #{@target_output_directory} needs %{plain_region}"
@@ -101,6 +104,7 @@ module KubernetesTemplateRendering
       resources(output_directory).each do |resource|
         resource.render(args)
       end
+      expand_placeholders(args, output_directory)
       puts
     end
 
@@ -241,6 +245,27 @@ module KubernetesTemplateRendering
 
         MESSAGE
         FileUtils.rm_rf(directory)
+      end
+    end
+
+    # Two orthogonal gates:
+    #   @spps.empty?  - caller didn't pass --spp NAME; nothing to fan out to
+    #   !@spp         - entry name is not SPP-shaped, so output_directory does not contain
+    #                   SPP_PLACEHOLDER; gsub-based expansion would be a no-op that hits
+    #                   --prune as a data-loss footgun (per_spp_dir collides with source).
+    def expand_placeholders(args, output_directory)
+      return if @spps.empty?
+      return unless @spp
+
+      @spps.each do |spp_name|
+        per_spp_dir = output_directory.gsub(SPP_PLACEHOLDER, spp_name)
+        prune_directory(per_spp_dir) if args.prune?
+        puts "Expanding #{SPP_PLACEHOLDER} to #{Color.magenta(spp_name)}"
+        PlaceholderExpander.expand!(
+          source_directory: output_directory,
+          target_name: spp_name,
+          placeholder_token: SPP_PLACEHOLDER
+        )
       end
     end
 

@@ -94,7 +94,8 @@ module KubernetesTemplateRendering
           color: args.color,
           variable_overrides: args.variable_overrides,
           source_repo: args.source_repo,
-          spps: args.spps
+          spps: args.spps,
+          only: args.only
         )
       end
 
