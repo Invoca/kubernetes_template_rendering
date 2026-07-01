@@ -20,15 +20,6 @@ module KubernetesTemplateRendering
   class Reconciler
     class OutOfScopeError < StandardError; end
 
-    # Raises unless `path` resolves within `scope_root` (full-path or relative `..` escape).
-    def self.validate_within_scope!(path, scope_root)
-      resolved = File.expand_path(path)
-      root = File.expand_path(scope_root)
-      unless resolved == root || resolved.start_with?(root + File::SEPARATOR)
-        raise OutOfScopeError, "reconcile: path #{resolved} resolves outside scope prefix #{root}"
-      end
-    end
-
     attr_reader :marker_mtime
 
     def initialize(rendered_directory)

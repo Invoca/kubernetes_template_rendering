@@ -89,7 +89,7 @@ module KubernetesTemplateRendering
     #                stays a manual git rm per the teardown runbook).
     def collect_reconcile_scopes
       scopes = resource_sets.values.flatten.flat_map(&:reconcile_scopes)
-      scopes.each { |scope| Reconciler.validate_within_scope!(scope[:base_root], @rendered_directory) }
+      scopes.each { |scope| validate_within_scope!(scope[:base_root], @rendered_directory) }
 
       base_roots = []
       spp_roots  = []
@@ -100,8 +100,19 @@ module KubernetesTemplateRendering
           base_roots << scope[:base_root]
         end
       end
-      spp_roots.each { |r| Reconciler.validate_within_scope!(r, @rendered_directory) }
+      spp_roots.each { |r| validate_within_scope!(r, @rendered_directory) }
       { base_roots: base_roots.uniq, spp_roots: spp_roots.uniq }
+    end
+
+    # Raises unless `path` resolves within `scope_root` (full-path or relative `..` escape).
+    # Lexical check (expand_path, not realpath) so it validates planned roots before they exist;
+    # Reconciler applies a separate realpath-based guard against symlink escapes during the sweep.
+    def validate_within_scope!(path, scope_root)
+      resolved = File.expand_path(path)
+      root = File.expand_path(scope_root)
+      unless resolved == root || resolved.start_with?(root + File::SEPARATOR)
+        raise Reconciler::OutOfScopeError, "reconcile: path #{resolved} resolves outside scope prefix #{root}"
+      end
     end
 
     # Expands an SPP sweep root into the concrete roots to sweep for this run.

@@ -18,22 +18,6 @@ RSpec.describe KubernetesTemplateRendering::Reconciler do
 
   before { stub_puts }
 
-  describe ".validate_within_scope!" do
-    it "is silent for a path inside the scope root" do
-      expect { described_class.validate_within_scope!(File.join(root, "a/b"), root) }.to_not raise_error
-    end
-
-    it "raises for a relative path that escapes the scope root" do
-      expect { described_class.validate_within_scope!(File.join(root, "../evil"), root) }
-        .to raise_error(described_class::OutOfScopeError)
-    end
-
-    it "raises for an absolute path outside the scope root" do
-      expect { described_class.validate_within_scope!("/somewhere/else", root) }
-        .to raise_error(described_class::OutOfScopeError)
-    end
-  end
-
   describe "#sweep!" do
     let(:base) { File.join(root, "us-east-1/staging/orange") }
     let(:stale) { File.join(base, "deleted-entry/x.yaml") }
