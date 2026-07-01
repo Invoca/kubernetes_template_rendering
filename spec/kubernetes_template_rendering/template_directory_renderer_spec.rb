@@ -90,7 +90,7 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
       File.utime(Time.now - 3600, Time.now - 3600, path)
     end
 
-    it "removes the directory of a deleted entry while keeping freshly-rendered output (AC 1)" do
+    it "removes the directory of a deleted entry while keeping freshly-rendered output" do
       # my-app is still rendered; deleted-app is the leftover output of an entry removed upstream.
       write_template_dir({ "prod" => "my-app" }, region: "us-east-1")
       base = File.join(rendered_directory, "us-east-1/prod/orange")
@@ -107,7 +107,7 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
       expect(File.directory?(stale_dir)).to be(false)
     end
 
-    it "produces identical results across two consecutive reconcile renders (AC 3)" do
+    it "produces identical results across two consecutive reconcile renders" do
       write_template_dir({ "prod" => "my-app" }, region: "us-east-1")
 
       render!
@@ -118,7 +118,7 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
       expect(second).to eq(first)
     end
 
-    it "hard-errors and deletes nothing when an entry path escapes its scope prefix (AC 4)" do
+    it "hard-errors and deletes nothing when an entry path escapes its scope prefix" do
       # An out-of-prefix scope is only reachable through the deprecated `directory:` escape hatch
       # (subdirectory/base paths are always rooted under region/type/color), so this test must use
       # `directory:` to exercise the guard that defends against exactly that footgun.
