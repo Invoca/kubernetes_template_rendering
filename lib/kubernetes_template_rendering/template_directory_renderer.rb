@@ -3,8 +3,10 @@
 require 'active_support'
 require 'active_support/core_ext' # for deep_merge
 require 'invoca/utils'
+require 'pathname'
 require 'yaml'
 require_relative 'resource_set'
+require_relative 'reconciler'
 require 'set'
 
 # This class points to a collection of template directories to render, and a rendered_directory to render into.
@@ -12,6 +14,7 @@ require 'set'
 module KubernetesTemplateRendering
   class TemplateDirectoryRenderer
     DEFINITIONS_FILENAME = "definitions.yaml"
+    SPP_FENCE_DIRNAME = "spp"
 
     attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color,
                 :variable_overrides, :source_repo, :spps, :only
@@ -31,6 +34,11 @@ module KubernetesTemplateRendering
     end
 
     def render(args)
+      if args.reconcile?
+        sweep_scopes = collect_reconcile_scopes # validates out-of-prefix before any writes
+        reconciler   = Reconciler.new(@rendered_directory) # marker captured before rendering/forking
+      end
+
       child_pids = []
       failed_processes = [] # [[pid, status]]
 
@@ -62,9 +70,80 @@ module KubernetesTemplateRendering
           raise "Child process completed with non-zero status: #{failed_processes.inspect}"
         end
       end
+
+      reconcile_sweep(reconciler, sweep_scopes) if args.reconcile?
     end
 
     private
+
+    # Collects sweep roots across all rendered resource sets and validates that each stays within
+    # rendered_directory (out-of-prefix, full or relative `..`, is a hard error).
+    #
+    # Returns two categories:
+    #   base_roots — non-SPP entries' shared parent (e.g. <region>/<cluster_type>/<color>/);
+    #                swept with an spp/ fence so sibling SPP directories are never touched.
+    #   spp_roots  — the specific SPP directory/directories that were rendered (e.g. spp/<spp-name>/);
+    #                swept without a fence since we are already inside exactly one SPP directory.
+    #                With --spp the SPP-PLACEHOLDER root expands to one root per requested SPP target;
+    #                without it, only the SPP-PLACEHOLDER root itself is swept (deleted-SPP cleanup
+    #                stays a manual git rm per the teardown runbook).
+    def collect_reconcile_scopes
+      scopes = resource_sets.values.flatten.flat_map(&:reconcile_scopes)
+      scopes.each { |scope| validate_within_scope!(scope[:base_root], @rendered_directory) }
+
+      base_roots = []
+      spp_roots  = []
+      scopes.each do |scope|
+        if within_spp_subtree?(scope[:base_root])
+          spp_roots.concat(spp_reconcile_roots(scope))
+        else
+          base_roots << scope[:base_root]
+        end
+      end
+      spp_roots.each { |r| validate_within_scope!(r, @rendered_directory) }
+      { base_roots: base_roots.uniq, spp_roots: spp_roots.uniq }
+    end
+
+    # Raises unless `path` resolves within `scope_root` (full-path or relative `..` escape).
+    # Lexical check (expand_path, not realpath) so it validates planned roots before they exist;
+    # Reconciler applies a separate realpath-based guard against symlink escapes during the sweep.
+    def validate_within_scope!(path, scope_root)
+      resolved = File.expand_path(path)
+      root = File.expand_path(scope_root)
+      unless resolved == root || resolved.start_with?(root + File::SEPARATOR)
+        raise Reconciler::OutOfScopeError, "reconcile: path #{resolved} resolves outside scope prefix #{root}"
+      end
+    end
+
+    # Expands an SPP sweep root into the concrete roots to sweep for this run.
+    # Without --spp, the placeholder root (spp/SPP-PLACEHOLDER) is swept as-is. With --spp, each
+    # requested target replaces the SPP-PLACEHOLDER segment (spp/staging-qa02a, ...), so only the
+    # requested SPP subtrees are swept and SPP-PLACEHOLDER / unrequested SPP siblings are left intact.
+    def spp_reconcile_roots(scope)
+      root = spp_sweep_root(scope)
+      return [root] if @spps.empty?
+      return [root] unless root.include?(ResourceSet::SPP_PLACEHOLDER)
+
+      @spps.map { |spp_name| root.gsub(ResourceSet::SPP_PLACEHOLDER, spp_name) }
+    end
+
+    def within_spp_subtree?(root)
+      Pathname.new(root).relative_path_from(Pathname.new(@rendered_directory)).each_filename.include?(SPP_FENCE_DIRNAME)
+    end
+
+    # When the directory pattern has no service subdirectory (e.g. `.../spp/SPP-PLACEHOLDER`),
+    # base_root lands at the `spp/` level itself — sweeping that would touch all SPP siblings.
+    # Use output_directory (= `spp/<spp-name>`) in that case instead.
+    def spp_sweep_root(scope)
+      File.basename(scope[:base_root]) == SPP_FENCE_DIRNAME ? scope[:output_directory] : scope[:base_root]
+    end
+
+    def reconcile_sweep(reconciler, scopes)
+      scopes[:base_roots].each { |r| reconciler.sweep!(root: r, fences: [File.join(r, SPP_FENCE_DIRNAME)]) }
+      scopes[:spp_roots].each  { |r| reconciler.sweep!(root: r) }
+    ensure
+      reconciler.finish!
+    end
 
     def read_definitions(path)
       File.read(path)

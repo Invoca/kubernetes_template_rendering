@@ -270,6 +270,48 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
     end
   end
 
+  describe "#reconcile_scopes" do
+    let(:config) do
+      {
+        "subdirectory" => "my-app",
+        "variables" => variables,
+        "regions" => ["us-east-1", "eu-central-1"],
+        "colors" => ["orange"]
+      }
+    end
+
+    it "uses the output directory's parent as the base root, for each region x color" do
+      expect(resource_set.reconcile_scopes).to contain_exactly(
+        { base_root: File.join(rendered_directory, "us-east-1", "prod", "orange"),    output_directory: File.join(rendered_directory, "us-east-1/prod/orange/my-app") },
+        { base_root: File.join(rendered_directory, "eu-central-1", "prod", "orange"), output_directory: File.join(rendered_directory, "eu-central-1/prod/orange/my-app") }
+      )
+    end
+
+    context "when a legacy directory: pattern omits cluster_type/color (e.g. <region>/<service>)" do
+      # This non-standard layout is only expressible via the deprecated `directory:` field;
+      # reconcile_scopes must still derive the base root from the actual rendered parent.
+      let(:config) do
+        {
+          "directory" => "%{plain_region}/transaction-events",
+          "variables" => variables,
+          "regions" => ["us-east-1", "eu-central-1"],
+          "colors" => ["orange"]
+        }
+      end
+
+      it "derives the base root from the actual rendered parent, not a fixed layout" do
+        expect(resource_set.reconcile_scopes).to contain_exactly(
+          { base_root: File.join(rendered_directory, "us-east-1"),    output_directory: File.join(rendered_directory, "us-east-1/transaction-events") },
+          { base_root: File.join(rendered_directory, "eu-central-1"), output_directory: File.join(rendered_directory, "eu-central-1/transaction-events") }
+        )
+      end
+    end
+
+    it "does not mutate variables" do
+      expect { resource_set.reconcile_scopes }.to_not(change { resource_set.variables })
+    end
+  end
+
   describe "render" do
     def expand_paths(paths)
       paths.map { |path| File.expand_path(File.join(template_directory, path)) }

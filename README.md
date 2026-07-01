@@ -41,6 +41,19 @@ To see a full list of options and how to use them, run the following command:
 gem exec -g kubernetes_template_rendering render_templates --help
 ```
 
+### Cleaning up stale output: `--prune` vs `--reconcile`
+
+Both flags remove output left over from templates/entries that no longer render, but they differ in how:
+
+- `--prune` deletes each entry's output directory with `rm -rf` **before** rendering. It never removes the directories of fully deleted/renamed entries and can clobber sibling directories when one entry renders at a prefix root above another.
+- `--reconcile` performs a safer, bounded sweep: it touches a marker, renders, then deletes only files older than the marker under each scope root `<region>/<cluster_type>/<color>/` (honoring `--cluster_type` / `--region` / `--color`), and finally removes any now-empty directories. This cleans up directories of deleted/renamed entries without clobbering freshly-rendered siblings, and two identical reconcile runs produce the same result.
+
+Notes:
+
+- `--reconcile` and `--prune` are mutually exclusive (passing both exits with an error). `--reconcile` and `--only` are likewise mutually exclusive, since a filtered render would leave un-rendered siblings looking stale under the shared base root.
+- `spp/` subtrees are fenced out of the base sweep. With `--spp NAME`, reconcile narrows the SPP sweep to the requested per-SPP subtree(s), leaving `SPP-PLACEHOLDER` and unrequested SPP siblings intact; without `--spp`, only the `SPP-PLACEHOLDER` subtree is swept. Deleted-SPP cleanup remains a manual `git rm` in the teardown runbook. See ADR-0002.
+- If any rendered entry resolves to a path outside its scope prefix (a full-path or relative `..` escape), reconcile hard-errors before deleting anything.
+
 ### Filtering to specific entries
 
 Pass `--only NAME` (repeatable) to render only the `definitions.yaml` entries whose top-level key exactly matches `NAME`. Composes with `--cluster_type`/`--region`/`--color`/`--spp` — all filters are AND'd.
