@@ -216,5 +216,44 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
       expect(File.exist?(File.join(placeholder_frontend, "frontend-prometheus-servicemonitor.yaml"))).to be(true) # re-rendered
       expanded_instances.each { |f| expect(File.exist?(f)).to be(true) } # expanded SPP instances untouched
     end
+
+    # TEST CASE 1: deploying to a specific SPP with --spp scopes the sweep to that SPP's subtree only.
+    # The reconcile root is computed by substituting the requested target into the SPP-PLACEHOLDER
+    # segment, so staging-qa02a is swept while SPP-PLACEHOLDER and the unrequested staging-qa10a are
+    # left intact. (Re-rendering the surviving resource into spp/staging-qa02a is PR #14's
+    # PlaceholderExpander work, covered by its own specs; here we assert reconcile scoping only.)
+    it "scopes the sweep to the requested --spp subtree, leaving SPP-PLACEHOLDER and other SPPs untouched (TEST CASE 1)" do
+      File.write(File.join(template_directory, "frontend-prometheus-servicemonitor.yaml.erb"), "kind: ServiceMonitor\n")
+      definitions = {
+        "SPP-PLACEHOLDER" => { "subdirectory" => "frontend", "regions" => ["us-east-1"], "colors" => ["orange"], "variables" => {} }
+      }
+      File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definitions.to_yaml)
+
+      spp_root          = File.join(rendered_directory, "us-east-1/staging/orange/spp")
+      requested_stale   = File.join(spp_root, "staging-qa02a/frontend/frontend-cm.yaml")  # in requested SPP -> swept
+      placeholder_stale = File.join(spp_root, "SPP-PLACEHOLDER/frontend/frontend-cm.yaml") # not requested -> untouched
+      other_spp_files   = %w[frontend-cm.yaml frontend-prometheus-servicemonitor.yaml].map do |f|
+        File.join(spp_root, "staging-qa10a/frontend", f) # unrequested SPP -> untouched
+      end
+
+      ([requested_stale, placeholder_stale] + other_spp_files).each do |f|
+        FileUtils.mkdir_p(File.dirname(f))
+        File.write(f, "old")
+        age(f)
+      end
+
+      described_class.new(
+        directories: [template_directory],
+        rendered_directory: rendered_directory,
+        cluster_type: "staging",
+        region: "us-east-1",
+        color: "orange",
+        spps: ["staging-qa02a"]
+      ).render(reconcile_args)
+
+      expect(File.exist?(requested_stale)).to be(false)              # swept inside requested SPP
+      expect(File.exist?(placeholder_stale)).to be(true)            # SPP-PLACEHOLDER not swept under --spp
+      other_spp_files.each { |f| expect(File.exist?(f)).to be(true) } # unrequested SPP untouched
+    end
   end
 end

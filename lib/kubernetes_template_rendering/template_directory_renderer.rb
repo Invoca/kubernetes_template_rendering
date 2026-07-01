@@ -16,9 +16,9 @@ module KubernetesTemplateRendering
     DEFINITIONS_FILENAME = "definitions.yaml"
     SPP_FENCE_DIRNAME = "spp"
 
-    attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color, :variable_overrides, :source_repo
+    attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color, :variable_overrides, :source_repo, :spps
 
-    def initialize(directories:, rendered_directory:, omitted_names: [], cluster_type: nil, region: nil, color: nil, variable_overrides: nil, source_repo: nil)
+    def initialize(directories:, rendered_directory:, omitted_names: [], cluster_type: nil, region: nil, color: nil, variable_overrides: nil, source_repo: nil, spps: [])
       @directories        = directories_with_definitions(Array(directories))
       @omitted_names      = Array(omitted_names)
       @rendered_directory = rendered_directory
@@ -27,6 +27,7 @@ module KubernetesTemplateRendering
       @color              = color
       @variable_overrides = variable_overrides || {}
       @source_repo        = source_repo
+      @spps               = Array(spps)
     end
 
     def render(args)
@@ -78,8 +79,11 @@ module KubernetesTemplateRendering
     # Returns two categories:
     #   base_roots — non-SPP entries' shared parent (e.g. <region>/<cluster_type>/<color>/);
     #                swept with an spp/ fence so sibling SPP directories are never touched.
-    #   spp_roots  — the specific SPP directory that was rendered (e.g. spp/<spp-name>/);
+    #   spp_roots  — the specific SPP directory/directories that were rendered (e.g. spp/<spp-name>/);
     #                swept without a fence since we are already inside exactly one SPP directory.
+    #                With --spp the SPP-PLACEHOLDER root expands to one root per requested SPP target;
+    #                without it, only the SPP-PLACEHOLDER root itself is swept (deleted-SPP cleanup
+    #                stays a manual git rm per the teardown runbook).
     def collect_reconcile_scopes
       scopes = resource_sets.values.flatten.flat_map(&:reconcile_scopes)
       scopes.each { |scope| Reconciler.validate_within_scope!(scope[:base_root], @rendered_directory) }
@@ -88,12 +92,25 @@ module KubernetesTemplateRendering
       spp_roots  = []
       scopes.each do |scope|
         if within_spp_subtree?(scope[:base_root])
-          spp_roots << spp_sweep_root(scope)
+          spp_roots.concat(spp_reconcile_roots(scope))
         else
           base_roots << scope[:base_root]
         end
       end
+      spp_roots.each { |r| Reconciler.validate_within_scope!(r, @rendered_directory) }
       { base_roots: base_roots.uniq, spp_roots: spp_roots.uniq }
+    end
+
+    # Expands an SPP sweep root into the concrete roots to sweep for this run.
+    # Without --spp, the placeholder root (spp/SPP-PLACEHOLDER) is swept as-is. With --spp, each
+    # requested target replaces the SPP-PLACEHOLDER segment (spp/staging-qa02a, ...), so only the
+    # requested SPP subtrees are swept and SPP-PLACEHOLDER / unrequested SPP siblings are left intact.
+    def spp_reconcile_roots(scope)
+      root = spp_sweep_root(scope)
+      return [root] if @spps.empty?
+      return [root] unless root.include?(ResourceSet::SPP_PLACEHOLDER)
+
+      @spps.map { |spp_name| root.sub(ResourceSet::SPP_PLACEHOLDER, spp_name) }
     end
 
     def within_spp_subtree?(root)

@@ -115,9 +115,37 @@ RSpec.describe KubernetesTemplateRendering::CLI do
       let(:options) { [render_option, "--reconcile", "--prune", template_directory_option] }
 
       it "exits with a mutually-exclusive error" do
-        expect(STDERR).to receive(:puts).with(/mutually exclusive/)
+        expect(STDERR).to receive(:puts).with(/--reconcile and --prune are mutually exclusive/)
         expect { described_class.send(:parse, options) }.to raise_exception(SystemExit)
       end
+    end
+
+    context "when combined with --only" do
+      let(:expect_system_exit) { true }
+      let(:options) { [render_option, "--reconcile", "--only=frontend", template_directory_option] }
+
+      it "exits with a mutually-exclusive error" do
+        expect(STDERR).to receive(:puts).with(/--reconcile and --only are mutually exclusive/)
+        expect { described_class.send(:parse, options) }.to raise_exception(SystemExit)
+      end
+    end
+  end
+
+  describe "--spp flag" do
+    let(:options) { [render_option, "--spp=staging-qa02a", "--spp=staging-qa02a", "--spp=staging-qa10a", template_directory_option] }
+
+    before do
+      FileUtils.mkdir(template_directory_option) rescue nil
+      FileUtils.touch(File.join(template_directory_option, described_class::DEFINITIONS_FILENAME))
+    end
+
+    it "collects the requested SPP targets, de-duplicated" do
+      _renderer, args = described_class.send(:parse, options)
+      expect(args.spps).to eq(["staging-qa02a", "staging-qa10a"])
+    end
+
+    it "threads the SPP targets into the renderer" do
+      expect(cli.spps).to eq(["staging-qa02a", "staging-qa10a"])
     end
   end
 
@@ -140,7 +168,8 @@ RSpec.describe KubernetesTemplateRendering::CLI do
                                                  region: nil,
                                                  cluster_type: nil,
                                                  variable_overrides: nil,
-                                                 source_repo: nil
+                                                 source_repo: nil,
+                                                 spps: []
                                                )
                                                .and_return(renderer)
 
