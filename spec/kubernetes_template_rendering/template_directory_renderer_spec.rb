@@ -219,22 +219,24 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
       expanded_instances.each { |f| expect(File.exist?(f)).to be(true) } # expanded SPP instances untouched
     end
 
-    # TEST CASE 1: deploying to a specific SPP with --spp scopes the sweep to that SPP's subtree only.
-    # The reconcile root is computed by substituting the requested target into the SPP-PLACEHOLDER
-    # segment, so staging-qa02a is swept while SPP-PLACEHOLDER and the unrequested staging-qa10a are
-    # left intact. (Re-rendering the surviving resource into spp/staging-qa02a is PR #14's
-    # PlaceholderExpander work, covered by its own specs; here we assert reconcile scoping only.)
-    it "scopes the sweep to the requested --spp subtree, leaving SPP-PLACEHOLDER and other SPPs untouched (TEST CASE 1)" do
+    # End-to-end TEST CASE 1: deploying to a specific SPP with --spp. frontend-cm.yaml.erb was deleted
+    # upstream, so only the servicemonitor renders. PlaceholderExpander expands the SPP-PLACEHOLDER
+    # output into spp/staging-qa02a (preserving mtimes, so the expanded file lands after the marker),
+    # and reconcile — scoped by substituting the requested target into the SPP-PLACEHOLDER segment —
+    # sweeps only spp/staging-qa02a. Result: the stale frontend-cm.yaml is deleted, the freshly
+    # expanded servicemonitor survives, and SPP-PLACEHOLDER / the unrequested staging-qa10a are intact.
+    it "sweeps the requested --spp subtree while keeping the freshly expanded resource and leaving other SPPs untouched (TEST CASE 1)" do
       File.write(File.join(template_directory, "frontend-prometheus-servicemonitor.yaml.erb"), "kind: ServiceMonitor\n")
       definitions = {
         "SPP-PLACEHOLDER" => { "subdirectory" => "frontend", "regions" => ["us-east-1"], "colors" => ["orange"], "variables" => {} }
       }
       File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definitions.to_yaml)
 
-      spp_root          = File.join(rendered_directory, "us-east-1/staging/orange/spp")
-      requested_stale   = File.join(spp_root, "staging-qa02a/frontend/frontend-cm.yaml")  # in requested SPP -> swept
-      placeholder_stale = File.join(spp_root, "SPP-PLACEHOLDER/frontend/frontend-cm.yaml") # not requested -> untouched
-      other_spp_files   = %w[frontend-cm.yaml frontend-prometheus-servicemonitor.yaml].map do |f|
+      spp_root            = File.join(rendered_directory, "us-east-1/staging/orange/spp")
+      requested_stale     = File.join(spp_root, "staging-qa02a/frontend/frontend-cm.yaml")  # in requested SPP -> swept
+      expanded_survivor   = File.join(spp_root, "staging-qa02a/frontend/frontend-prometheus-servicemonitor.yaml") # expanded fresh -> kept
+      placeholder_stale   = File.join(spp_root, "SPP-PLACEHOLDER/frontend/frontend-cm.yaml") # not requested -> untouched
+      other_spp_files     = %w[frontend-cm.yaml frontend-prometheus-servicemonitor.yaml].map do |f|
         File.join(spp_root, "staging-qa10a/frontend", f) # unrequested SPP -> untouched
       end
 
@@ -253,8 +255,9 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
         spps: ["staging-qa02a"]
       ).render(reconcile_args)
 
-      expect(File.exist?(requested_stale)).to be(false)              # swept inside requested SPP
-      expect(File.exist?(placeholder_stale)).to be(true)            # SPP-PLACEHOLDER not swept under --spp
+      expect(File.exist?(requested_stale)).to be(false)              # stale cm swept inside requested SPP
+      expect(File.exist?(expanded_survivor)).to be(true)             # freshly expanded resource kept
+      expect(File.exist?(placeholder_stale)).to be(true)             # SPP-PLACEHOLDER not swept under --spp
       other_spp_files.each { |f| expect(File.exist?(f)).to be(true) } # unrequested SPP untouched
     end
   end

@@ -76,7 +76,7 @@ Each derived root is re-validated to stay within `rendered_directory`. Substitut
 
 ### Merge ordering with PR #14
 
-PR #14 should land first; OCTO-842 then rebases onto it. The `--spp` / `--only` flag plumbing, `CLIArguments` fields, and renderer signature here intentionally mirror PR #14 so de-duplication is trivial. Two pieces are deliberately **not** duplicated and are delivered by PR #14: the `--only` *filtering* of rendered entries (here `--only` only feeds the reconcile guard), and `PlaceholderExpander`. After #14 merges, the renderer's `renderer_from_args` call should also pass `only:` for filtering.
+PR #14 landed on `main` first and OCTO-842 was merged on top of it. The `--spp` / `--only` flag plumbing, `CLIArguments` fields, and renderer signature were intentionally mirrored from PR #14, so the merge de-duplicated cleanly (identical hunks). Two pieces are owned by PR #14 rather than this change: the `--only` *filtering* of rendered entries (this ADR only adds the `--reconcile` + `--only` guard) and `PlaceholderExpander` (this change reuses the existing `ResourceSet::SPP_PLACEHOLDER` constant for sweep-root substitution and depends on the expander only at runtime). Since `--spp` expansion now runs during render (`PlaceholderExpander` preserves source mtimes), a `--spp` reconcile is a true end-to-end flow: expanded per-SPP files land after the marker and survive, while stale files in the requested SPP subtree are swept.
 
 ## Links
 
