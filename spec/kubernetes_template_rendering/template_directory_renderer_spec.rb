@@ -136,6 +136,50 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
       expect(File.exist?(preexisting)).to be(true)
     end
 
+    describe "SPP layout guard" do
+      # Writes a single definition using the deprecated `directory:` escape hatch (the only way to
+      # produce a non-canonical layout). `name` decides SPP-ness (contains SPP-PLACEHOLDER or not).
+      def write_directory_definition(name, directory)
+        File.write(File.join(template_directory, "app.yaml.erb"), "kind: Test\nname: app\n")
+        definitions = { name => { "directory" => directory, "regions" => ["us-east-1"], "colors" => ["orange"], "variables" => {} } }
+        File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definitions.to_yaml)
+      end
+
+      it "hard-errors and deletes nothing when an SPP entry renders outside the canonical spp/SPP-PLACEHOLDER prefix" do
+        write_directory_definition("SPP-PLACEHOLDER", "%{plain_region}/%{type}/%{color}/notspp/SPP-PLACEHOLDER")
+        preexisting = File.join(rendered_directory, "us-east-1/staging/orange/keep.yaml")
+        FileUtils.mkdir_p(File.dirname(preexisting))
+        File.write(preexisting, "keep")
+        age(preexisting)
+
+        expect { render! }.to raise_error(KubernetesTemplateRendering::Reconciler::SppLayoutError)
+        expect(File.exist?(preexisting)).to be(true)
+      end
+
+      it "allows an SPP entry using directory: when it still resolves to the canonical spp/SPP-PLACEHOLDER prefix" do
+        write_directory_definition("SPP-PLACEHOLDER", "%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER/frontend")
+
+        expect { render! }.to_not raise_error
+        expect(File.exist?(File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER/frontend/app.yaml"))).to be(true)
+      end
+
+      it "hard-errors when a non-SPP entry renders under an spp/ segment" do
+        write_directory_definition("prod", "%{plain_region}/%{type}/%{color}/spp/sneaky")
+
+        expect { render! }.to raise_error(KubernetesTemplateRendering::Reconciler::SppLayoutError)
+      end
+
+      it "does not run the layout guard without --reconcile (a non-canonical SPP entry still renders)" do
+        write_directory_definition("SPP-PLACEHOLDER", "%{plain_region}/%{type}/%{color}/notspp/SPP-PLACEHOLDER")
+        plain_args = KubernetesTemplateRendering::CLIArguments.new(rendered_directory, template_directory, false, '')
+
+        expect do
+          described_class.new(directories: [template_directory], rendered_directory: rendered_directory).render(plain_args)
+        end.to_not raise_error
+        expect(File.exist?(File.join(rendered_directory, "us-east-1/staging/orange/notspp/SPP-PLACEHOLDER/app.yaml"))).to be(true)
+      end
+    end
+
     it "fences spp/ subtrees out of the base sweep (deleted-SPP cleanup stays manual)" do
       # A non-SPP staging entry (named "staging" -> cluster_type staging, spp: false) coexists with a
       # real SPP instance under the same region/type/color. The base sweep must not touch the spp/ tree.

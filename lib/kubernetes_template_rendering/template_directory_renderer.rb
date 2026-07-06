@@ -90,6 +90,7 @@ module KubernetesTemplateRendering
     def collect_reconcile_scopes
       scopes = resource_sets.values.flatten.flat_map(&:reconcile_scopes)
       scopes.each { |scope| validate_within_scope!(scope[:base_root], @rendered_directory) }
+      scopes.each { |scope| validate_spp_layout!(scope) }
 
       base_roots = []
       spp_roots  = []
@@ -112,6 +113,24 @@ module KubernetesTemplateRendering
       root = File.expand_path(scope_root)
       unless resolved == root || resolved.start_with?(root + File::SEPARATOR)
         raise Reconciler::OutOfScopeError, "reconcile: path #{resolved} resolves outside scope prefix #{root}"
+      end
+    end
+
+    # Under --reconcile, SPP entries must render beneath the canonical
+    # <region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER/ prefix, and non-SPP entries must never
+    # render beneath any spp/ segment. A directory:-overridden path that still resolves to the
+    # canonical SPP prefix is allowed; anything else is a hard error before any writes.
+    def validate_spp_layout!(scope)
+      output = File.expand_path(scope[:output_directory])
+      if scope[:spp]
+        base = File.expand_path(scope[:spp_base_root])
+        unless output == base || output.start_with?(base + File::SEPARATOR)
+          raise Reconciler::SppLayoutError,
+                "reconcile: SPP entry renders to #{output}, outside the required SPP prefix #{base}"
+        end
+      elsif within_spp_subtree?(scope[:output_directory])
+        raise Reconciler::SppLayoutError,
+              "reconcile: non-SPP entry renders under an spp/ segment (#{output}); only SPP entries may render beneath spp/"
       end
     end
 

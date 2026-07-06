@@ -80,11 +80,16 @@ module KubernetesTemplateRendering
     # `<region>/<service>` pattern it is `<region>`. The parent is shared with sibling entries, so
     # leftovers from a deleted/renamed entry under it are swept. The renderer validates each
     # `base_root` stays within `rendered_directory` (out-of-prefix, full or relative, is a hard error).
+    #
+    # Each scope also carries `spp:` (whether this entry is an SPP definition) and `spp_base_root:`
+    # (the canonical `<region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER` prefix for that region ×
+    # color) so the renderer can enforce the SPP layout guard before rendering.
     def reconcile_scopes
       @regions.flat_map do |plain_region|
         @colors.map do |c|
           output_directory = File.join(@rendered_directory, format(@target_output_directory, plain_region: plain_region, color: c, type: @kubernetes_cluster_type))
-          { base_root: File.dirname(output_directory), output_directory: output_directory }
+          spp_base_root    = File.join(@rendered_directory, format(SPP_BASE_OUTPUT_DIRECTORY, plain_region: plain_region, color: c, type: @kubernetes_cluster_type))
+          { base_root: File.dirname(output_directory), output_directory: output_directory, spp: @spp, spp_base_root: spp_base_root }
         end
       end
     end
