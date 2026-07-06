@@ -111,4 +111,4 @@ PR #14 landed on `main` first and OCTO-842 was merged on top of it. The `--spp` 
 * Refines [ADR-0001](0001-strict-rendering-paths-for-stale-resource-deletion.md)
 * Supersedes the standalone ADR-0003 draft (SPP layout guard), now folded into this record.
 * Depends on [PR #14](https://github.com/Invoca/kubernetes_template_rendering/pull/14)
-* Design/spec: `docs/superpowers/specs/2026-07-06-reconcile-spp-layout-guard-design.md`
+* Supersedes the implementation spec previously at `docs/superpowers/specs/2026-07-06-reconcile-spp-layout-guard-design.md` (removed; its content is folded into this ADR).
