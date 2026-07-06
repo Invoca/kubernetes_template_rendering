@@ -243,6 +243,32 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
       expect(File.exist?(sibling_spp_file)).to be(true)                                            # unrequested sibling untouched
     end
 
+    # Guards the premise behind sweeping SPP-PLACEHOLDER: it is only safe because SPP-PLACEHOLDER is
+    # re-rendered this run. A region excluded by --region is NOT rendered, so its SPP-PLACEHOLDER tree
+    # is not fresh and must never be swept (would be new data loss on the source-of-truth tree).
+    it "does not sweep SPP-PLACEHOLDER in a region excluded by --region" do
+      File.write(File.join(template_directory, "app.yaml.erb"), "kind: Test\nname: app\n")
+      definitions = {
+        "SPP-PLACEHOLDER" => { "subdirectory" => "my-app", "regions" => ["us-east-1", "eu-central-1"], "colors" => ["orange"], "variables" => {} }
+      }
+      File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definitions.to_yaml)
+
+      excluded_region_file = File.join(rendered_directory, "eu-central-1/staging/orange/spp/SPP-PLACEHOLDER/my-app/keep.yaml")
+      FileUtils.mkdir_p(File.dirname(excluded_region_file))
+      File.write(excluded_region_file, "keep")
+      age(excluded_region_file) # stale relative to the marker; would be deleted if wrongly swept
+
+      described_class.new(
+        directories: [template_directory],
+        rendered_directory: rendered_directory,
+        region: "us-east-1",
+        spps: ["staging-qa02a"]
+      ).render(reconcile_args)
+
+      expect(File.exist?(File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER/my-app/app.yaml"))).to be(true) # rendered region produced
+      expect(File.exist?(excluded_region_file)).to be(true)                                                                          # excluded region untouched — no data loss
+    end
+
     # End-to-end TEST CASE 2: a real SPP definition (name contains SPP-PLACEHOLDER, no deprecated
     # `directory:`) renders into the derived `<region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER`
     # base path. Without --spp, deleting templates/frontend/frontend-cm.yaml.erb upstream and
