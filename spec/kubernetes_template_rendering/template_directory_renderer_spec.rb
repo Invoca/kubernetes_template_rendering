@@ -243,6 +243,27 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
       expect(File.exist?(sibling_spp_file)).to be(true)                                            # unrequested sibling untouched
     end
 
+    it "under --spp, does not delete other already-rendered SPP instances" do
+      write_template_dir({ "SPP-PLACEHOLDER" => "web" }, region: "us-east-1")
+      spp_base = File.join(rendered_directory, "us-east-1/staging/orange/spp")
+
+      # Several SPPs rendered out by previous deploys; back-dated so they predate this run's marker.
+      # If the sweep wrongly included them they would be deleted, so their survival is meaningful.
+      other_spps  = %w[staging-qa10a staging-qa20b staging-prod01]
+      other_files = other_spps.map { |spp| File.join(spp_base, spp, "web", "app.yaml") }
+      other_files.each do |f|
+        FileUtils.mkdir_p(File.dirname(f))
+        File.write(f, "existing")
+        age(f)
+      end
+
+      # Deploy targeting a single SPP.
+      described_class.new(directories: [template_directory], rendered_directory: rendered_directory, spps: ["staging-qa02a"]).render(reconcile_args)
+
+      expect(File.exist?(File.join(spp_base, "staging-qa02a/web/app.yaml"))).to be(true) # requested SPP rendered
+      other_files.each { |f| expect(File.exist?(f)).to be(true) }                        # every other already-rendered SPP left intact
+    end
+
     # Guards the premise behind sweeping SPP-PLACEHOLDER: it is only safe because SPP-PLACEHOLDER is
     # re-rendered this run. A region excluded by --region is NOT rendered, so its SPP-PLACEHOLDER tree
     # is not fresh and must never be swept (would be new data loss on the source-of-truth tree).
