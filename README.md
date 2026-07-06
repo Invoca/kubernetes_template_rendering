@@ -53,7 +53,7 @@ Notes:
 - `--reconcile` and `--prune` are mutually exclusive (passing both exits with an error). `--reconcile` and `--only` are likewise mutually exclusive, since a filtered render would leave un-rendered siblings looking stale under the shared base root.
 - `spp/` subtrees are fenced out of the base sweep. With `--spp NAME`, reconcile narrows the SPP sweep to the requested per-SPP subtree(s), leaving `SPP-PLACEHOLDER` and unrequested SPP siblings intact; without `--spp`, only the `SPP-PLACEHOLDER` subtree is swept. Deleted-SPP cleanup remains a manual `git rm` in the teardown runbook. See ADR-0002.
 - If any rendered entry resolves to a path outside its scope prefix (a full-path or relative `..` escape), reconcile hard-errors before deleting anything.
-- Reconcile enforces the SPP layout: every SPP entry (name contains `SPP-PLACEHOLDER`) must render under `<region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER/`, and no non-SPP entry may render under an `spp/` segment. A `directory:` override that still resolves to that prefix is allowed; anything else hard-errors before rendering. (This guard runs only under `--reconcile`.)
+- Reconcile enforces the SPP layout: every SPP entry (name contains `SPP-PLACEHOLDER`) must render under `<region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER/`, and no non-SPP entry may render under an `spp/` segment. A `directory:` override that still resolves to that prefix is allowed; anything else hard-errors before rendering. (This guard runs only under `--reconcile`.) See ADR-0003.
 
 ### Filtering to specific entries
 
