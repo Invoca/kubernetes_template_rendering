@@ -4,7 +4,7 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.0] - Unreleased
+## [0.6.0] - 2026-07-06
 ### Added
 - Added `--reconcile` flag: a bounded, marker-based sweep that replaces the destructive per-entry `rm -rf` of `--prune`. It touches a marker before rendering, then after rendering deletes only files older than the marker under each scope root (`<region>/<cluster_type>/<color>/`) and removes empty directories, correctly cleaning up directories of deleted/renamed entries. `spp/` subtrees are fenced out of the base sweep, paths resolving outside their scope prefix raise a hard error, and `--reconcile` combined with `--prune` is rejected.
 - Made `--reconcile` `--spp`-aware: without `--spp` only the `SPP-PLACEHOLDER` subtree is swept; with `--spp NAME` the sweep covers `SPP-PLACEHOLDER` (always re-rendered, as the expansion source) plus each requested per-SPP subtree (substituting `SPP-PLACEHOLDER` into the sweep root), leaving unrequested SPP siblings intact. Rejected `--reconcile` combined with `--only`, which would delete un-rendered siblings under the shared base root. See ADR-0002.
