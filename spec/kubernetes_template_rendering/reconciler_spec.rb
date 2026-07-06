@@ -64,5 +64,26 @@ RSpec.describe KubernetesTemplateRendering::Reconciler do
 
       expect { reconciler.sweep!(root: base) }.to raise_error(described_class::OutOfScopeError)
     end
+
+    it "deletes nothing when an out-of-scope path aborts the sweep" do
+      reconciler = described_class.new(root)
+      write_with_mtime(stale, reconciler.marker_mtime - 60)
+      outside = File.join(root, "outside.yaml")
+      write_with_mtime(outside, reconciler.marker_mtime - 60)
+      File.symlink(outside, File.join(base, "escape.yaml"))
+
+      expect { reconciler.sweep!(root: base) }.to raise_error(described_class::OutOfScopeError)
+      expect(File.exist?(stale)).to be(true)
+    end
+
+    it "raises when an empty directory resolves outside the sweep root via a symlink" do
+      reconciler = described_class.new(root)
+      outside_dir = File.join(root, "outside-dir")
+      FileUtils.mkdir_p(outside_dir) # empty: no files, so only the directory-level guard can catch it
+      FileUtils.mkdir_p(base)
+      File.symlink(outside_dir, File.join(base, "escape-dir"))
+
+      expect { reconciler.sweep!(root: base) }.to raise_error(described_class::OutOfScopeError)
+    end
   end
 end

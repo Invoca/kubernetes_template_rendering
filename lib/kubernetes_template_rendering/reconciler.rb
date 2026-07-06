@@ -45,24 +45,40 @@ module KubernetesTemplateRendering
 
     private
 
+    # Two-phase for all-or-nothing safety: validate the whole tree while collecting,
+    # then delete only after the walk succeeds. A scope error mid-walk deletes nothing.
     def delete_stale_files(root, real_root, fence_set)
+      collect_stale_files(root, real_root, fence_set).each do |path|
+        puts "Reconcile: removing stale file #{Color.magenta(path)}"
+        File.delete(path)
+      end
+    end
+
+    def collect_stale_files(root, real_root, fence_set)
+      stale_paths = []
+
       Find.find(root) do |path|
         if File.directory?(path)
-          Find.prune if fenced?(path, fence_set)
+          # Skip fenced subtrees (e.g. spp/) entirely; validate every other directory.
+          if fenced?(path, fence_set)
+            Find.prune
+          else
+            ensure_in_scope!(path, root, real_root)
+          end
           next
         end
+
         next unless File.file?(path)
 
-        real_path = File.realpath(path)
-        unless real_path == real_root || real_path.start_with?(real_root + File::SEPARATOR)
-          raise OutOfScopeError, "reconcile: #{path} resolves outside sweep root #{root}"
-        end
-
-        if File.mtime(path) < @marker_mtime
-          puts "Reconcile: removing stale file #{Color.magenta(path)}"
-          File.delete(path)
-        end
+        ensure_in_scope!(path, root, real_root)
+        stale_paths << path if stale?(path)
       end
+
+      stale_paths
+    end
+
+    def stale?(path)
+      File.mtime(path) < @marker_mtime
     end
 
     def remove_empty_dirs(root, fence_set)
@@ -78,6 +94,13 @@ module KubernetesTemplateRendering
           Dir.rmdir(dir)
         end
       end
+    end
+
+    def ensure_in_scope!(path, root, real_root)
+      real = File.realpath(path)
+      return if real == real_root || real.start_with?(real_root + File::SEPARATOR)
+
+      raise OutOfScopeError, "reconcile: #{path} resolves outside sweep root #{root}"
     end
 
     def fenced?(path, fence_set)
