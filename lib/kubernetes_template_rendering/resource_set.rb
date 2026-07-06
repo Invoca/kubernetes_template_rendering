@@ -2,10 +2,14 @@
 
 require_relative "resource"
 require_relative "deploy_grouped_resource"
+require_relative "placeholder_expander"
 
 # This class points to the resources in a given template_directory for a given kubernetes_cluster_type like 'ops' or 'prod' or 'ci'.
 # `config` contains the definitions found in `definitions_path`.
-#   The most important config is "directory" which is a pattern like "%{region}/%{type}/%{color}/staging-ops".
+#   The output directory is resolved from the mutually-exclusive "directory" and "subdirectory" config:
+#     "directory"    is a full pattern like "%{plain_region}/%{type}/%{color}/staging-ops".
+#     "subdirectory" is a literal final segment appended to the base path -> "%{plain_region}/%{type}/%{color}/<subdirectory>".
+#     when neither is given, output goes to the base path "%{plain_region}/%{type}/%{color}".
 #   The config "regions", "colors" are the sets of regions and colors to render for.
 # It renders into `rendered_directory`.
 module KubernetesTemplateRendering
@@ -13,14 +17,16 @@ module KubernetesTemplateRendering
     attr_reader :variables, :output_directory, :deploy_group_config, :omitted_resources,
                 :template_directory, :target_output_directory, :regions, :colors,
                 :definitions_path, :kubernetes_cluster_type, :variable_overrides,
-                :source_repo
+                :source_repo, :spps
 
-    def initialize(config:, template_directory:, rendered_directory:, definitions_path:, kubernetes_cluster_type:, variable_overrides: {}, source_repo: nil)
+    def initialize(config:, template_directory:, rendered_directory:, definitions_path:, kubernetes_cluster_type:,
+                   spp: false, spps: [], variable_overrides: {}, source_repo: nil)
+      @spp                     = spp
       @variables               = config["variables"] || {}
       @deploy_group_config     = config["deploy_groups"]
       @omitted_resources       = config["omitted_resources"]
       @template_directory      = template_directory
-      @target_output_directory = config["directory"] or raise ArgumentError, "missing 'directory:' in #{config.inspect}"
+      @target_output_directory = resolve_target_output_directory(config["directory"], config["subdirectory"])
       @regions                 = config["regions"] || []
       @colors                  = config["colors"] || []
       @rendered_directory      = rendered_directory
@@ -29,6 +35,7 @@ module KubernetesTemplateRendering
       @variable_overrides      = variable_overrides
       @source_repo             = source_repo
       @resources               = {}
+      @spps                    = Array(spps)
 
       if @kubernetes_cluster_type != "kube-platform"
         @target_output_directory.include?("%{plain_region}") or raise "#{@template_directory}: target_output_directory #{@target_output_directory} needs %{plain_region}"
@@ -80,10 +87,52 @@ module KubernetesTemplateRendering
       resources(output_directory).each do |resource|
         resource.render(args)
       end
+      expand_placeholders(args, output_directory)
       puts
     end
 
     private
+
+    # The output-directory pattern is resolved from the mutually-exclusive
+    # `directory:` and `subdirectory:` config fields:
+    #   directory only    -> the directory pattern, verbatim
+    #   subdirectory only -> "%{plain_region}/%{type}/%{color}/<subdirectory>"
+    #   neither           -> base path; "%{plain_region}/%{type}/%{color}", or the SPP base
+    #                        "%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER" for SPP definitions
+    #   both              -> ArgumentError
+    SPP_PLACEHOLDER = "SPP-PLACEHOLDER"
+    BASE_OUTPUT_DIRECTORY = File.join("%{plain_region}", "%{type}", "%{color}")
+    # SPP definitions render under an extra spp/SPP-PLACEHOLDER segment so each SPP
+    # instance has a distinct, bounded path and the literal token survives for
+    # downstream per-instance substitution.
+    SPP_BASE_OUTPUT_DIRECTORY = File.join(BASE_OUTPUT_DIRECTORY, "spp", SPP_PLACEHOLDER)
+
+    def resolve_target_output_directory(directory, subdirectory)
+      if directory && subdirectory
+        raise ArgumentError, "specify only one of 'directory:' or 'subdirectory:' in #{({ 'directory' => directory, 'subdirectory' => subdirectory }).inspect}"
+      elsif directory
+        warn_directory_deprecated(directory)
+        directory
+      elsif subdirectory
+        File.join(base_output_directory, subdirectory)
+      else
+        base_output_directory
+      end
+    end
+
+    # SPP definitions render under SPP_BASE_OUTPUT_DIRECTORY; everything else uses the standard base.
+    def base_output_directory
+      @spp ? SPP_BASE_OUTPUT_DIRECTORY : BASE_OUTPUT_DIRECTORY
+    end
+
+    # `directory:` is a deprecated legacy escape hatch. It is the only way to produce a
+    # path that is not derived from the standard "%{plain_region}/%{type}/%{color}" layout,
+    # which is unsafe for --reconcile stale-resource deletion (see ADR-0001). Warn on any use.
+    def warn_directory_deprecated(directory)
+      puts Color.brown("WARNING: #{@template_directory}: `directory:` is deprecated. " \
+                       "Remove it to render into the standard #{base_output_directory} layout, " \
+                       "or use `subdirectory:` instead. (got `directory: #{directory}`)")
+    end
 
     CLOUD_REGION_TO_PROVIDER_AND_DATACENTER = {
       # Note: The names below should match RegionDiscovery from process_settings-production.
@@ -179,6 +228,27 @@ module KubernetesTemplateRendering
 
         MESSAGE
         FileUtils.rm_rf(directory)
+      end
+    end
+
+    # Two orthogonal gates:
+    #   @spps.empty?  - caller didn't pass --spp NAME; nothing to fan out to
+    #   !@spp         - entry name is not SPP-shaped, so output_directory does not contain
+    #                   SPP_PLACEHOLDER; gsub-based expansion would be a no-op that hits
+    #                   --prune as a data-loss footgun (per_spp_dir collides with source).
+    def expand_placeholders(args, output_directory)
+      return if @spps.empty?
+      return unless @spp
+
+      @spps.each do |spp_name|
+        per_spp_dir = output_directory.gsub(SPP_PLACEHOLDER, spp_name)
+        prune_directory(per_spp_dir) if args.prune?
+        puts "Expanding #{SPP_PLACEHOLDER} to #{Color.magenta(spp_name)}"
+        PlaceholderExpander.expand!(
+          source_directory: output_directory,
+          target_name: spp_name,
+          placeholder_token: SPP_PLACEHOLDER
+        )
       end
     end
 

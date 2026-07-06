@@ -4,6 +4,24 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-26
+### Added
+- Added `--spp NAME` (repeatable) flag that expands rendered output of `SPP-PLACEHOLDER` entries into per-Staging-Partial-Platform sibling directories, substituting `SPP-PLACEHOLDER` and its `PLACEHOLDER` suffix in both paths and contents. Composes with the SPP-derived base path introduced in 0.4.0 (sibling per-SPP trees are created next to the literal `SPP-PLACEHOLDER` segment). Replaces the post-render `invocaops_docker/tools/spp-transform/spp-transform.rb` step inside the gem.
+- Added `--only NAME` (repeatable) flag that filters rendering to specific top-level `definitions.yaml` entries by exact key match. Composes with `--cluster_type`/`--region`/`--color`/`--spp` (all filters are AND'd). Raises with a list of valid keys if any `--only` value matches no entry across the rendered template directories.
+
+## [0.4.0] - 2026-06-25
+### Added
+- Added a `subdirectory:` option to `definitions.yaml`. It is mutually exclusive with `directory:` and sets the output path to the base path `%{plain_region}/%{type}/%{color}/<subdirectory>`. When neither `directory:` nor `subdirectory:` is given, output is rendered to the base path `%{plain_region}/%{type}/%{color}` (previously a missing `directory:` raised an error).
+- Emit a deprecation warning on any use of `directory:` in `definitions.yaml`, suggesting to remove it (to render into the standard `%{plain_region}/%{type}/%{color}` layout) or switch to `subdirectory:`. `directory:` is the only way to produce a non-standard path, which is unsafe for the planned `--reconcile` stale-resource deletion. See ADR-0001.
+- SPP definitions (those whose name contains the `SPP-PLACEHOLDER` token) now render under a derived base path `%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER`, with `subdirectory:` composing on top. This keeps each SPP instance's output distinct and bounded under the `region/type/color` tree for `--reconcile`, and preserves the literal `SPP-PLACEHOLDER` token for downstream per-instance substitution. The `directory:` deprecation warning now points SPP definitions at the SPP base layout. See ADR-0001.
+
+## [0.3.0] - 2026-06-24
+### Fixed
+- Ruby 4.0 compatibility: declare `ostruct` as a dependency (it is `require`d directly but was removed from Ruby's default gems in 4.0.0) and bump `activesupport` to `7.2.3.1` so its `logger` dependency is resolved (`logger` was likewise dropped from default gems).
+
+### Removed
+- No longer emit the `# Variable overrides used:` comment in rendered files. Because overrides such as `deploySha` change on every build, this comment caused large, content-free diffs across every rendered file. `--variable-override` still applies the overrides to the rendered output; only the comment is removed.
+
 ## [0.2.5] - 2025-05-08
 ### Fixed
 - Updated `rexml` dependency to avoid security issues

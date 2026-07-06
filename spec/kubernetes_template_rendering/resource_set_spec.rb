@@ -50,6 +50,176 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
     allow(FileUtils).to receive(:mkdir_p).with(output_directory)
   end
 
+  describe "output directory pattern resolution" do
+    subject(:target_output_directory) do
+      described_class.new(config: resolution_config,
+                          rendered_directory: rendered_directory,
+                          template_directory: template_directory,
+                          definitions_path: definitions_path,
+                          kubernetes_cluster_type: "prod",
+                          spp: spp_value).target_output_directory
+    end
+
+    let(:spp_value) { false }
+    let(:directory_value) { nil }
+    let(:subdirectory_value) { nil }
+    let(:resolution_config) do
+      {
+        "regions" => ["us-east-1"],
+        "colors" => ["orange"]
+      }.tap do |cfg|
+        cfg["directory"]    = directory_value    if directory_value
+        cfg["subdirectory"] = subdirectory_value if subdirectory_value
+      end
+    end
+
+    context "with directory only" do
+      let(:directory_value) { "custom/%{plain_region}/path" }
+
+      it "uses the directory pattern verbatim" do
+        expect(target_output_directory).to eq("custom/%{plain_region}/path")
+      end
+    end
+
+    context "with subdirectory only" do
+      let(:subdirectory_value) { "my-app" }
+
+      it "builds the base path with the subdirectory appended" do
+        expect(target_output_directory).to eq("%{plain_region}/%{type}/%{color}/my-app")
+      end
+    end
+
+    context "with neither directory nor subdirectory" do
+      it "uses the base path" do
+        expect(target_output_directory).to eq("%{plain_region}/%{type}/%{color}")
+      end
+    end
+
+    context "with both directory and subdirectory" do
+      let(:directory_value) { "custom/%{plain_region}/path" }
+      let(:subdirectory_value) { "my-app" }
+
+      it "raises ArgumentError" do
+        expect { target_output_directory }.to raise_error(ArgumentError, /only one of 'directory:' or 'subdirectory:'/)
+      end
+    end
+
+    context "for an SPP definition with neither directory nor subdirectory" do
+      let(:spp_value) { true }
+
+      it "uses the SPP base path" do
+        expect(target_output_directory).to eq("%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER")
+      end
+    end
+
+    context "for an SPP definition with subdirectory only" do
+      let(:spp_value) { true }
+      let(:subdirectory_value) { "my-app" }
+
+      it "appends the subdirectory under the SPP base path" do
+        expect(target_output_directory).to eq("%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER/my-app")
+      end
+    end
+  end
+
+  describe "directory deprecation warning" do
+    subject(:warnings) do
+      captured = []
+      allow_any_instance_of(described_class).to receive(:puts) { |_instance, *msgs| captured.concat(msgs) }
+      described_class.new(config: warning_config,
+                          rendered_directory: rendered_directory,
+                          template_directory: template_directory,
+                          definitions_path: definitions_path,
+                          kubernetes_cluster_type: "prod",
+                          spp: spp_value)
+      captured.join("\n")
+    end
+
+    let(:directory_value) { nil }
+    let(:subdirectory_value) { nil }
+    let(:spp_value) { false }
+    let(:warning_config) do
+      {
+        "regions" => ["us-east-1"],
+        "colors" => ["orange"]
+      }.tap do |cfg|
+        cfg["directory"]    = directory_value    if directory_value
+        cfg["subdirectory"] = subdirectory_value if subdirectory_value
+      end
+    end
+
+    context "when directory is used with a non-standard layout" do
+      let(:directory_value) { "../some-cluster/%{plain_region}-render-here" }
+
+      it "warns that directory is deprecated" do
+        expect(warnings).to include("`directory:` is deprecated")
+      end
+    end
+
+    context "when directory is used with the standard layout" do
+      let(:directory_value) { "%{plain_region}/%{type}/%{color}/staging-ops" }
+
+      it "still warns that directory is deprecated" do
+        expect(warnings).to include("`directory:` is deprecated")
+      end
+    end
+
+    context "when subdirectory is used" do
+      let(:subdirectory_value) { "my-app" }
+
+      it "does not warn" do
+        expect(warnings).to_not include("deprecated")
+      end
+    end
+
+    context "when neither directory nor subdirectory is given" do
+      it "does not warn" do
+        expect(warnings).to_not include("deprecated")
+      end
+    end
+
+    context "when directory is used by an SPP definition" do
+      let(:spp_value) { true }
+      let(:directory_value) { "custom/%{plain_region}/spp-path" }
+
+      it "suggests the SPP base layout" do
+        expect(warnings).to include("spp/SPP-PLACEHOLDER")
+      end
+    end
+  end
+
+  describe "rendering with subdirectory" do
+    subject(:resource_set) do
+      described_class.new(config: subdirectory_config,
+                          rendered_directory: rendered_directory,
+                          template_directory: template_directory,
+                          definitions_path: definitions_path,
+                          kubernetes_cluster_type: "prod")
+    end
+    let(:subdirectory_config) do
+      {
+        "subdirectory" => "my-app",
+        "variables" => variables,
+        "regions" => ["us-east-1"],
+        "colors" => ["orange"]
+      }
+    end
+    let(:expected_directory) { File.join(rendered_directory, "us-east-1", "prod", "orange", "my-app") }
+
+    before do
+      resource = instance_double(KubernetesTemplateRendering::Resource)
+      allow(resource).to receive(:render)
+      allow(KubernetesTemplateRendering::Resource).to receive(:new).and_return(resource)
+      allow(File).to receive(:exist?).with(expected_directory).and_return(false)
+      allow(FileUtils).to receive(:mkdir_p)
+    end
+
+    it "renders into region/cluster_type/color/subdirectory" do
+      expect(FileUtils).to receive(:mkdir_p).with(expected_directory)
+      resource_set.render(args)
+    end
+  end
+
   describe "output directory" do
     before do
       resource = instance_double(KubernetesTemplateRendering::Resource)
@@ -199,6 +369,98 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
       let(:omitted_resources) { ["app-svc.yaml.erb", "app-cm.yaml.erb"] }
 
       include_examples "render"
+    end
+  end
+
+  describe "SPP placeholder expansion" do
+    let(:rendered_directory) { Dir.mktmpdir }
+    let(:template_directory) { Dir.mktmpdir }
+
+    before do
+      allow(FileUtils).to receive(:mkdir_p).and_call_original
+      allow(File).to receive(:exist?).and_call_original
+    end
+
+    let(:config) do
+      {
+        "directory" => "%{plain_region}/staging/%{color}/spp/SPP-PLACEHOLDER-telephony",
+        "regions" => ["us-east-1"],
+        "colors" => ["orange"],
+        "variables" => { "namespace" => "SPP-PLACEHOLDER-telephony" }
+      }
+    end
+    let(:args) { KubernetesTemplateRendering::CLIArguments.new.tap { |a| a.fork = false } }
+
+    after do
+      FileUtils.rm_rf(rendered_directory)
+      FileUtils.rm_rf(template_directory)
+    end
+
+    it "calls PlaceholderExpander once per SPP for the rendered output directory" do
+      resource_set = described_class.new(
+        config: config,
+        template_directory: template_directory,
+        rendered_directory: rendered_directory,
+        definitions_path: File.join(template_directory, "definitions.yaml"),
+        kubernetes_cluster_type: "staging",
+        spp: true,
+        spps: ["staging-qa02a", "staging-qa08a"]
+      )
+
+      expected_output_directory = File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER-telephony")
+      allow(resource_set).to receive(:resources).and_return([])
+      allow(resource_set).to receive(:puts)
+
+      expect(KubernetesTemplateRendering::PlaceholderExpander).to receive(:expand!)
+        .with(source_directory: expected_output_directory, target_name: "staging-qa02a", placeholder_token: "SPP-PLACEHOLDER")
+      expect(KubernetesTemplateRendering::PlaceholderExpander).to receive(:expand!)
+        .with(source_directory: expected_output_directory, target_name: "staging-qa08a", placeholder_token: "SPP-PLACEHOLDER")
+
+      resource_set.render(args)
+    end
+
+    it "with --prune, wipes each per-SPP destination directory before expansion" do
+      resource_set = described_class.new(
+        config: config,
+        template_directory: template_directory,
+        rendered_directory: rendered_directory,
+        definitions_path: File.join(template_directory, "definitions.yaml"),
+        kubernetes_cluster_type: "staging",
+        spp: true,
+        spps: ["staging-qa02a"]
+      )
+
+      args.prune = true
+      per_spp_dest = File.join(rendered_directory, "us-east-1/staging/orange/spp/staging-qa02a-telephony")
+      FileUtils.mkdir_p(per_spp_dest)
+      stale_file = File.join(per_spp_dest, "stale.yaml")
+      File.write(stale_file, "old: data\n")
+
+      allow(resource_set).to receive(:resources).and_return([])
+      allow(resource_set).to receive(:puts)
+      allow(KubernetesTemplateRendering::PlaceholderExpander).to receive(:expand!)
+
+      resource_set.render(args)
+
+      expect(File.exist?(stale_file)).to be(false)
+    end
+
+    it "does not call PlaceholderExpander when spp is false" do
+      resource_set = described_class.new(
+        config: config.merge("directory" => "%{plain_region}/%{type}/%{color}/production"),
+        template_directory: template_directory,
+        rendered_directory: rendered_directory,
+        definitions_path: File.join(template_directory, "definitions.yaml"),
+        kubernetes_cluster_type: "prod",
+        spp: false,
+        spps: []
+      )
+
+      allow(resource_set).to receive(:resources).and_return([])
+      allow(resource_set).to receive(:puts)
+
+      expect(KubernetesTemplateRendering::PlaceholderExpander).not_to receive(:expand!)
+      resource_set.render(args)
     end
   end
 end
