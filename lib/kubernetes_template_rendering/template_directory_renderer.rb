@@ -84,12 +84,15 @@ module KubernetesTemplateRendering
     #                swept with an spp/ fence so sibling SPP directories are never touched.
     #   spp_roots  — the specific SPP directory/directories that were rendered (e.g. spp/<spp-name>/);
     #                swept without a fence since we are already inside exactly one SPP directory.
-    #                With --spp the SPP-PLACEHOLDER root expands to one root per requested SPP target;
-    #                without it, only the SPP-PLACEHOLDER root itself is swept (deleted-SPP cleanup
-    #                stays a manual git rm per the teardown runbook).
+    #                Without --spp, only the SPP-PLACEHOLDER root is swept. With --spp, the sweep
+    #                covers SPP-PLACEHOLDER (always re-rendered) plus each requested target; unrequested
+    #                siblings are left intact (their deleted-SPP cleanup stays a manual git rm).
     def collect_reconcile_scopes
       scopes = resource_sets.values.flatten.flat_map(&:reconcile_scopes)
-      scopes.each { |scope| validate_within_scope!(scope[:base_root], @rendered_directory) }
+      scopes.each do |scope|
+        validate_within_scope!(scope[:base_root], @rendered_directory)
+        validate_spp_layout!(scope)
+      end
 
       base_roots = []
       spp_roots  = []
@@ -115,16 +118,35 @@ module KubernetesTemplateRendering
       end
     end
 
+    # Under --reconcile, SPP entries must render beneath the canonical
+    # <region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER/ prefix, and non-SPP entries must never
+    # render beneath any spp/ segment. A directory:-overridden path that still resolves to the
+    # canonical SPP prefix is allowed; anything else is a hard error before any writes.
+    def validate_spp_layout!(scope)
+      output = File.expand_path(scope[:output_directory])
+      if scope[:spp]
+        base = File.expand_path(scope[:spp_base_root])
+        unless output == base || output.start_with?(base + File::SEPARATOR)
+          raise Reconciler::SppLayoutError,
+                "reconcile: SPP entry renders to #{output}, outside the required SPP prefix #{base}"
+        end
+      elsif within_spp_subtree?(scope[:output_directory])
+        raise Reconciler::SppLayoutError,
+              "reconcile: non-SPP entry renders under an spp/ segment (#{output}); only SPP entries may render beneath spp/"
+      end
+    end
+
     # Expands an SPP sweep root into the concrete roots to sweep for this run.
-    # Without --spp, the placeholder root (spp/SPP-PLACEHOLDER) is swept as-is. With --spp, each
-    # requested target replaces the SPP-PLACEHOLDER segment (spp/staging-qa02a, ...), so only the
-    # requested SPP subtrees are swept and SPP-PLACEHOLDER / unrequested SPP siblings are left intact.
+    # Without --spp, the placeholder root (spp/SPP-PLACEHOLDER) is swept as-is. With --spp, the sweep
+    # covers the placeholder root *and* each requested target (spp/staging-qa02a, ...): SPP-PLACEHOLDER
+    # is always re-rendered (it is the expansion source) and each target is freshly expanded from it,
+    # so both are marker-safe. Unrequested SPP siblings are not re-rendered this run and stay excluded.
     def spp_reconcile_roots(scope)
       root = spp_sweep_root(scope)
       return [root] if @spps.empty?
       return [root] unless root.include?(ResourceSet::SPP_PLACEHOLDER)
 
-      @spps.map { |spp_name| root.gsub(ResourceSet::SPP_PLACEHOLDER, spp_name) }
+      [root] + @spps.map { |spp_name| root.gsub(ResourceSet::SPP_PLACEHOLDER, spp_name) }
     end
 
     def within_spp_subtree?(root)

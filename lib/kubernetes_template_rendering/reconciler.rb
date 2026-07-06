@@ -19,6 +19,7 @@ module KubernetesTemplateRendering
   # manual `git rm`, never an automatic sweep.
   class Reconciler
     class OutOfScopeError < StandardError; end
+    class SppLayoutError < StandardError; end
 
     attr_reader :marker_mtime
 
