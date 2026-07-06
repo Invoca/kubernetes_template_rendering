@@ -89,8 +89,10 @@ module KubernetesTemplateRendering
     #                siblings are left intact (their deleted-SPP cleanup stays a manual git rm).
     def collect_reconcile_scopes
       scopes = resource_sets.values.flatten.flat_map(&:reconcile_scopes)
-      scopes.each { |scope| validate_within_scope!(scope[:base_root], @rendered_directory) }
-      scopes.each { |scope| validate_spp_layout!(scope) }
+      scopes.each do |scope|
+        validate_within_scope!(scope[:base_root], @rendered_directory)
+        validate_spp_layout!(scope)
+      end
 
       base_roots = []
       spp_roots  = []
