@@ -32,6 +32,7 @@ module KubernetesTemplateRendering
           op.on("--region=REGION",                             "set the specific region to render")                                   { args.region = _1 }
           op.on("--color=COLOR",                               "set the specific color to render")                                    { args.color = _1 }
           op.on("--[no-]prune",                                "enable/disable pruning of untouched resources")                       { args.prune = _1 }
+          op.on("--[no-]reconcile",                            "bounded post-render sweep of stale resources")                        { args.reconcile = _1 }
           op.on("--source-repo=SOURCE_REPO",                   "set the source repo for the rendered templates")                      { args.source_repo = _1 }
           op.on("--spp=NAME", "Staging Partial Platform target name to expand SPP-PLACEHOLDER output for (repeatable)") do |name|
             args.spps ||= []
@@ -63,6 +64,19 @@ module KubernetesTemplateRendering
 
         unless args.valid?
           STDERR.puts(parser)
+          exit(1)
+        end
+
+        if args.reconcile? && args.prune?
+          STDERR.puts("--reconcile and --prune are mutually exclusive")
+          exit(1)
+        end
+
+        # --only renders a subset of entries, but reconcile sweeps the shared <region>/<type>/<color>
+        # base root; the un-rendered siblings would look stale and be deleted. SPP targeting uses --spp
+        # (which scopes reconcile to per-SPP subtrees), so --only + --reconcile is rejected outright.
+        if args.reconcile? && args.only.any?
+          STDERR.puts("--reconcile and --only are mutually exclusive")
           exit(1)
         end
 

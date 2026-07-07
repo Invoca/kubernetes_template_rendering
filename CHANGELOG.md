@@ -4,6 +4,12 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-07-06
+### Added
+- Added `--reconcile` flag: a bounded, marker-based sweep that replaces the destructive per-entry `rm -rf` of `--prune`. It touches a marker before rendering, then after rendering deletes only files older than the marker under each scope root (`<region>/<cluster_type>/<color>/`) and removes empty directories, correctly cleaning up directories of deleted/renamed entries. `spp/` subtrees are fenced out of the base sweep, paths resolving outside their scope prefix raise a hard error, and `--reconcile` combined with `--prune` is rejected.
+- Made `--reconcile` `--spp`-aware: without `--spp` only the `SPP-PLACEHOLDER` subtree is swept; with `--spp NAME` the sweep covers `SPP-PLACEHOLDER` (always re-rendered, as the expansion source) plus each requested per-SPP subtree (substituting `SPP-PLACEHOLDER` into the sweep root), leaving unrequested SPP siblings intact. Rejected `--reconcile` combined with `--only`, which would delete un-rendered siblings under the shared base root. See ADR-0002.
+- Added a `--reconcile` SPP layout guard: SPP entries (name contains `SPP-PLACEHOLDER`) must render under `<region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER/`, and non-SPP entries must not render under any `spp/` segment. A `directory:` override that still resolves to the canonical SPP prefix is allowed; anything else hard-errors before rendering. The guard runs only under `--reconcile`. See ADR-0002.
+
 ## [0.5.0] - 2026-06-26
 ### Added
 - Added `--spp NAME` (repeatable) flag that expands rendered output of `SPP-PLACEHOLDER` entries into per-Staging-Partial-Platform sibling directories, substituting `SPP-PLACEHOLDER` and its `PLACEHOLDER` suffix in both paths and contents. Composes with the SPP-derived base path introduced in 0.4.0 (sibling per-SPP trees are created next to the literal `SPP-PLACEHOLDER` segment). Replaces the post-render `invocaops_docker/tools/spp-transform/spp-transform.rb` step inside the gem.
