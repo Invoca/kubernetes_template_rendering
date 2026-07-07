@@ -14,6 +14,7 @@ module KubernetesTemplateRendering
       :variable_overrides,
       :prune,
       :source_repo,
+      :reconcile,
       :spps,
       :only
     ) do
@@ -31,6 +32,10 @@ module KubernetesTemplateRendering
 
       def prune?
         !!prune
+      end
+
+      def reconcile?
+        !!reconcile
       end
 
       def render_files?

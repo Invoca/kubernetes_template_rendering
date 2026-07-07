@@ -270,6 +270,66 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
     end
   end
 
+  describe "#reconcile_scopes" do
+    let(:config) do
+      {
+        "subdirectory" => "my-app",
+        "variables" => variables,
+        "regions" => ["us-east-1", "eu-central-1"],
+        "colors" => ["orange"]
+      }
+    end
+
+    it "uses the output directory's parent as the base root, for each region x color" do
+      expect(resource_set.reconcile_scopes).to contain_exactly(
+        { base_root: File.join(rendered_directory, "us-east-1", "prod", "orange"),    output_directory: File.join(rendered_directory, "us-east-1/prod/orange/my-app"),    spp: false, spp_base_root: File.join(rendered_directory, "us-east-1/prod/orange/spp/SPP-PLACEHOLDER") },
+        { base_root: File.join(rendered_directory, "eu-central-1", "prod", "orange"), output_directory: File.join(rendered_directory, "eu-central-1/prod/orange/my-app"), spp: false, spp_base_root: File.join(rendered_directory, "eu-central-1/prod/orange/spp/SPP-PLACEHOLDER") }
+      )
+    end
+
+    context "for an SPP resource set" do
+      subject(:resource_set) do
+        described_class.new(config: config,
+                            rendered_directory: rendered_directory,
+                            template_directory: template_directory,
+                            definitions_path: definitions_path,
+                            kubernetes_cluster_type: "staging",
+                            spp: true)
+      end
+
+      it "marks each scope as spp and carries the canonical spp_base_root, for each region x color" do
+        expect(resource_set.reconcile_scopes).to contain_exactly(
+          { base_root: File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER"),    output_directory: File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER/my-app"),    spp: true, spp_base_root: File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER") },
+          { base_root: File.join(rendered_directory, "eu-central-1/staging/orange/spp/SPP-PLACEHOLDER"), output_directory: File.join(rendered_directory, "eu-central-1/staging/orange/spp/SPP-PLACEHOLDER/my-app"), spp: true, spp_base_root: File.join(rendered_directory, "eu-central-1/staging/orange/spp/SPP-PLACEHOLDER") }
+        )
+      end
+    end
+
+    context "when a legacy directory: pattern omits cluster_type/color (e.g. <region>/<service>)" do
+      # This non-standard layout is only expressible via the deprecated `directory:` field;
+      # reconcile_scopes must still derive the base root from the actual rendered parent.
+      let(:config) do
+        {
+          "directory" => "%{plain_region}/transaction-events",
+          "variables" => variables,
+          "regions" => ["us-east-1", "eu-central-1"],
+          "colors" => ["orange"]
+        }
+      end
+
+      it "derives the base root from the actual rendered parent, not a fixed layout" do
+        expect(resource_set.reconcile_scopes).to contain_exactly(
+          { base_root: File.join(rendered_directory, "us-east-1"),    output_directory: File.join(rendered_directory, "us-east-1/transaction-events"),    spp: false, spp_base_root: File.join(rendered_directory, "us-east-1/prod/orange/spp/SPP-PLACEHOLDER") },
+          { base_root: File.join(rendered_directory, "eu-central-1"), output_directory: File.join(rendered_directory, "eu-central-1/transaction-events"), spp: false, spp_base_root: File.join(rendered_directory, "eu-central-1/prod/orange/spp/SPP-PLACEHOLDER") }
+        )
+      end
+    end
+
+    it "does not mutate variables" do
+      expect { resource_set.reconcile_scopes }.to_not(change { resource_set.variables })
+    end
+  end
+
   describe "render" do
     def expand_paths(paths)
       paths.map { |path| File.expand_path(File.join(template_directory, path)) }
