@@ -8,7 +8,7 @@ module KubernetesTemplateRendering
 
     attr_reader :groups_to_render, :variables, :template_path, :output_directory, :template_path_exclusions, :group_variable_name
 
-    def initialize(template_path:, definitions_path:, variables:, output_directory:, groups_to_render:, template_path_exclusions:, group_variable_name: nil)
+    def initialize(template_path:, definitions_path:, variables:, output_directory:, groups_to_render:, template_path_exclusions:, group_variable_name: nil, variable_overrides: {}, source_repo: nil)
       @template_path    = template_path
       @definitions_path = definitions_path
       @variables        = variables
@@ -16,6 +16,8 @@ module KubernetesTemplateRendering
       @groups_to_render = groups_to_render
       @template_path_exclusions = template_path_exclusions || {}
       @group_variable_name = group_variable_name || DEFAULT_GROUP_VARIABLE_NAME
+      @variable_overrides = variable_overrides
+      @source_repo        = source_repo
     end
 
     def render(args)
@@ -28,7 +30,7 @@ module KubernetesTemplateRendering
           else
             vars     = variables.merge(group_variable_name => deploy_group)
             filename = filename_for_deploy_group(deploy_group)
-            Resource.new(template_path: template_path, definitions_path: @definitions_path, variables: vars, output_directory: output_directory, output_filename: filename).tap do |resource|
+            Resource.new(template_path: template_path, definitions_path: @definitions_path, variables: vars, output_directory: output_directory, output_filename: filename, variable_overrides: @variable_overrides, source_repo: @source_repo).tap do |resource|
               resource.render(args) if args.render_files?
             end
           end

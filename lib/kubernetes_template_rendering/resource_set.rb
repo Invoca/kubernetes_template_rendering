@@ -293,7 +293,9 @@ module KubernetesTemplateRendering
           output_directory: output_directory,
           groups_to_render: deploy_groups_to_render,
           template_path_exclusions: deploy_group_config["exclude_files"],
-          group_variable_name: deploy_group_config["variable_name"]
+          group_variable_name: deploy_group_config["variable_name"],
+          variable_overrides: variable_overrides,
+          source_repo: source_repo
         )
       end
     end
