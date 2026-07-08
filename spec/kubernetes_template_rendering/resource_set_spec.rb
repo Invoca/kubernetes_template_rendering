@@ -358,7 +358,9 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
                                                output_directory: expanded_output_directory,
                                                groups_to_render: deploy_groups,
                                                template_path_exclusions: nil,
-                                               group_variable_name: group_variable_name
+                                               group_variable_name: group_variable_name,
+                                               variable_overrides: {},
+                                               source_repo: nil
                                              )
                                              .and_return(deploy_grouped_resource)
           expect(deploy_grouped_resource).to receive(:render)
@@ -429,6 +431,45 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
       let(:omitted_resources) { ["app-svc.yaml.erb", "app-cm.yaml.erb"] }
 
       include_examples "render"
+    end
+
+    context "when variable_overrides and source_repo are provided" do
+      subject(:resource_set) do
+        described_class.new(
+          config: config,
+          rendered_directory: rendered_directory,
+          template_directory: template_directory,
+          definitions_path: definitions_path,
+          kubernetes_cluster_type: "prod",
+          variable_overrides: { "deploySha" => "abc123" },
+          source_repo: "Invoca/web"
+        )
+      end
+
+      let(:deploy_group_config) { { "group_names" => deploy_groups } }
+
+      it "forwards variable_overrides and source_repo to DeployGroupedResource" do
+        path = File.expand_path(File.join(template_directory, "app-deploy.yaml.erb"))
+        deploy_grouped_resource = instance_double(KubernetesTemplateRendering::DeployGroupedResource)
+        allow(KubernetesTemplateRendering::Resource).to receive(:new).and_return(instance_double(KubernetesTemplateRendering::Resource, render: nil))
+
+        expect(KubernetesTemplateRendering::DeployGroupedResource).to receive(:new)
+          .with(
+            template_path: path,
+            definitions_path: definitions_path,
+            variables: variables,
+            output_directory: expanded_output_directory,
+            groups_to_render: deploy_groups,
+            template_path_exclusions: nil,
+            group_variable_name: nil,
+            variable_overrides: { "deploySha" => "abc123" },
+            source_repo: "Invoca/web"
+          )
+          .and_return(deploy_grouped_resource)
+        expect(deploy_grouped_resource).to receive(:render)
+
+        resource_set.render(args)
+      end
     end
   end
 
