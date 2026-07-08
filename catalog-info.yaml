@@ -32,5 +32,6 @@ spec:
   type: library
   lifecycle: production
   owner: octothorpe
+  system: kubernetes-platform
   dependsOn:
   - component:invoca-utils-gem
