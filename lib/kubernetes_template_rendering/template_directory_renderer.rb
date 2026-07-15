@@ -92,6 +92,11 @@ module KubernetesTemplateRendering
       scopes.each do |scope|
         validate_within_scope!(scope[:base_root], @rendered_directory)
         validate_spp_layout!(scope)
+        # Every entry must render within its canonical root so reconcile owns exactly what it sweeps.
+        # SPP entries are already constrained to the spp/SPP-PLACEHOLDER prefix by validate_spp_layout!;
+        # a non-SPP entry can only escape its base via the deprecated `directory:` field, which reconcile
+        # cannot own — so reject it before any writes rather than sweep a tree it does not render into.
+        validate_within_scope!(scope[:output_directory], scope[:base_root]) unless scope[:spp]
       end
 
       base_roots = []
@@ -142,7 +147,8 @@ module KubernetesTemplateRendering
     # is always re-rendered (it is the expansion source) and each target is freshly expanded from it,
     # so both are marker-safe. Unrequested SPP siblings are not re-rendered this run and stay excluded.
     def spp_reconcile_roots(scope)
-      root = spp_sweep_root(scope)
+      # base_root is the canonical `.../spp/SPP-PLACEHOLDER` prefix for SPP entries.
+      root = scope[:base_root]
       return [root] if @spps.empty?
       return [root] unless root.include?(ResourceSet::SPP_PLACEHOLDER)
 
@@ -151,13 +157,6 @@ module KubernetesTemplateRendering
 
     def within_spp_subtree?(root)
       Pathname.new(root).relative_path_from(Pathname.new(@rendered_directory)).each_filename.include?(SPP_FENCE_DIRNAME)
-    end
-
-    # When the directory pattern has no service subdirectory (e.g. `.../spp/SPP-PLACEHOLDER`),
-    # base_root lands at the `spp/` level itself — sweeping that would touch all SPP siblings.
-    # Use output_directory (= `spp/<spp-name>`) in that case instead.
-    def spp_sweep_root(scope)
-      File.basename(scope[:base_root]) == SPP_FENCE_DIRNAME ? scope[:output_directory] : scope[:base_root]
     end
 
     def reconcile_sweep(reconciler, scopes)

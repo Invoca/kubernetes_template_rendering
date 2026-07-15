@@ -4,6 +4,13 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-07-15
+### Fixed
+- Fixed the `--reconcile` sweep root for entries whose `subdirectory:` nests more than one level deep (e.g. `subdirectory: exclude-argocd/auth`). The sweep root is now the entry's canonical base — `<region>/<cluster_type>/<color>` for non-SPP entries and `<region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER` for SPP entries — regardless of `subdirectory:` depth, rather than the immediate parent of the rendered output directory. Previously a nested `subdirectory:` pushed the sweep root one level too deep, so when a `subdirectory:` was renamed or nested deeper the files left at the old shallower path were siblings of the sweep root and were never swept.
+
+### Changed
+- Under `--reconcile`, non-SPP entries must now render within their canonical `<region>/<cluster_type>/<color>` base; an entry that renders outside it (only reachable via the deprecated `directory:` field) hard-errors before any writes. This completes the reconcile layout hard-validation deferred in ADR-0001 — SPP entries were already constrained to the `spp/SPP-PLACEHOLDER` prefix. See ADR-0001.
+
 ## [0.6.1] - 2026-07-08
 ### Fixed
 - Fixed `variable_overrides` and `source_repo` not being forwarded to child `Resource` instances created by `DeployGroupedResource`. Previously, `--variable-override` values (e.g. `deploySha`) were silently unavailable inside all `*-deploy.jsonnet` and `*-deploy.yaml.erb` templates, causing a `KeyError` at render time. `DeployGroupedResource#initialize` now accepts both as optional keyword arguments and passes them through to each `Resource.new` call in `#render`. `ResourceSet#grouped_resources` is updated to supply both values.

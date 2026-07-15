@@ -373,6 +373,57 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
       expect(File.exist?(placeholder_survivor)).to be(true)          # freshly rendered SPP-PLACEHOLDER resource kept
       other_spp_files.each { |f| expect(File.exist?(f)).to be(true) } # unrequested SPP untouched
     end
+
+    # Reproduces the reported orphaning: a prior deploy rendered under spp/<name>/auth; the definition
+    # now nests one level deeper (subdirectory: exclude-argocd/auth). The SPP sweep root must stay at
+    # spp/<name>/ so the shallower old-layout file is swept rather than stranded beside the new subtree.
+    it "sweeps a stale file left at a shallower path after an SPP subdirectory is nested deeper" do
+      write_template_dir({ "SPP-PLACEHOLDER" => "exclude-argocd/auth" }, region: "us-east-1")
+      spp_base   = File.join(rendered_directory, "us-east-1/staging/orange/spp")
+      old_layout = File.join(spp_base, "staging-qa04a/auth/old.yaml") # previous shallower layout -> now stale
+      FileUtils.mkdir_p(File.dirname(old_layout))
+      File.write(old_layout, "stale")
+      age(old_layout)
+
+      described_class.new(directories: [template_directory], rendered_directory: rendered_directory, spps: ["staging-qa04a"]).render(reconcile_args)
+
+      expect(File.exist?(old_layout)).to be(false)                                                       # shallower old-layout file swept
+      expect(File.exist?(File.join(spp_base, "staging-qa04a/exclude-argocd/auth/app.yaml"))).to be(true) # new nested layout kept
+    end
+
+    # Same orphaning for a non-SPP entry: the base sweep root must stay at <region>/<type>/<color>
+    # regardless of how deep the subdirectory nests, so the shallower old-layout file is swept.
+    it "sweeps a stale file left at a shallower path after a non-SPP subdirectory is nested deeper" do
+      write_template_dir({ "prod" => "exclude-argocd/my-app" }, region: "us-east-1")
+      base       = File.join(rendered_directory, "us-east-1/prod/orange")
+      old_layout = File.join(base, "my-app/old.yaml") # previous shallower layout -> now stale
+      FileUtils.mkdir_p(File.dirname(old_layout))
+      File.write(old_layout, "stale")
+      age(old_layout)
+
+      render!
+
+      expect(File.exist?(old_layout)).to be(false)                                       # shallower old-layout file swept
+      expect(File.exist?(File.join(base, "exclude-argocd/my-app/app.yaml"))).to be(true) # new nested layout kept
+    end
+
+    # Under --reconcile every entry must render under its canonical root. A non-SPP entry whose
+    # directory: lands inside rendered_directory but outside <region>/<type>/<color> is not owned by
+    # reconcile, so it is a hard error before any writes rather than a sweep of the wrong tree.
+    it "hard-errors and deletes nothing when a non-SPP entry renders outside its canonical base path" do
+      File.write(File.join(template_directory, "app.yaml.erb"), "kind: Test\nname: app\n")
+      definitions = {
+        "prod" => { "directory" => "%{plain_region}/elsewhere/app", "regions" => ["us-east-1"], "colors" => ["orange"], "variables" => {} }
+      }
+      File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definitions.to_yaml)
+      preexisting = File.join(rendered_directory, "us-east-1/prod/orange/keep.yaml")
+      FileUtils.mkdir_p(File.dirname(preexisting))
+      File.write(preexisting, "keep")
+      age(preexisting)
+
+      expect { render! }.to raise_error(KubernetesTemplateRendering::Reconciler::OutOfScopeError)
+      expect(File.exist?(preexisting)).to be(true)
+    end
   end
 
   it "with --only, builds ResourceSets only for matching entries" do

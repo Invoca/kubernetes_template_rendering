@@ -280,11 +280,28 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
       }
     end
 
-    it "uses the output directory's parent as the base root, for each region x color" do
+    it "roots the base at the canonical base path, for each region x color" do
       expect(resource_set.reconcile_scopes).to contain_exactly(
         { base_root: File.join(rendered_directory, "us-east-1", "prod", "orange"),    output_directory: File.join(rendered_directory, "us-east-1/prod/orange/my-app"),    spp: false, spp_base_root: File.join(rendered_directory, "us-east-1/prod/orange/spp/SPP-PLACEHOLDER") },
         { base_root: File.join(rendered_directory, "eu-central-1", "prod", "orange"), output_directory: File.join(rendered_directory, "eu-central-1/prod/orange/my-app"), spp: false, spp_base_root: File.join(rendered_directory, "eu-central-1/prod/orange/spp/SPP-PLACEHOLDER") }
       )
+    end
+
+    context "when the subdirectory nests more than one level deep" do
+      let(:config) do
+        {
+          "subdirectory" => "exclude-argocd/my-app",
+          "variables" => variables,
+          "regions" => ["us-east-1"],
+          "colors" => ["orange"]
+        }
+      end
+
+      it "roots the base at the canonical base path, not the nested output parent" do
+        expect(resource_set.reconcile_scopes).to contain_exactly(
+          { base_root: File.join(rendered_directory, "us-east-1", "prod", "orange"), output_directory: File.join(rendered_directory, "us-east-1/prod/orange/exclude-argocd/my-app"), spp: false, spp_base_root: File.join(rendered_directory, "us-east-1/prod/orange/spp/SPP-PLACEHOLDER") }
+        )
+      end
     end
 
     context "for an SPP resource set" do
@@ -303,11 +320,29 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
           { base_root: File.join(rendered_directory, "eu-central-1/staging/orange/spp/SPP-PLACEHOLDER"), output_directory: File.join(rendered_directory, "eu-central-1/staging/orange/spp/SPP-PLACEHOLDER/my-app"), spp: true, spp_base_root: File.join(rendered_directory, "eu-central-1/staging/orange/spp/SPP-PLACEHOLDER") }
         )
       end
+
+      context "when the subdirectory nests more than one level deep" do
+        let(:config) do
+          {
+            "subdirectory" => "exclude-argocd/my-app",
+            "variables" => variables,
+            "regions" => ["us-east-1"],
+            "colors" => ["orange"]
+          }
+        end
+
+        it "roots the base at the canonical spp/SPP-PLACEHOLDER path, not the nested output parent" do
+          expect(resource_set.reconcile_scopes).to contain_exactly(
+            { base_root: File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER"), output_directory: File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER/exclude-argocd/my-app"), spp: true, spp_base_root: File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER") }
+          )
+        end
+      end
     end
 
-    context "when a legacy directory: pattern omits cluster_type/color (e.g. <region>/<service>)" do
-      # This non-standard layout is only expressible via the deprecated `directory:` field;
-      # reconcile_scopes must still derive the base root from the actual rendered parent.
+    context "when a legacy directory: pattern renders outside the canonical layout (e.g. <region>/<service>)" do
+      # The deprecated `directory:` field is the only way to express a non-canonical layout. The base
+      # root is always the canonical base path regardless; the renderer's --reconcile guard rejects an
+      # entry whose output falls outside that root (see template_directory_renderer_spec).
       let(:config) do
         {
           "directory" => "%{plain_region}/transaction-events",
@@ -317,10 +352,10 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
         }
       end
 
-      it "derives the base root from the actual rendered parent, not a fixed layout" do
+      it "roots the base at the canonical base path, independent of the directory: output" do
         expect(resource_set.reconcile_scopes).to contain_exactly(
-          { base_root: File.join(rendered_directory, "us-east-1"),    output_directory: File.join(rendered_directory, "us-east-1/transaction-events"),    spp: false, spp_base_root: File.join(rendered_directory, "us-east-1/prod/orange/spp/SPP-PLACEHOLDER") },
-          { base_root: File.join(rendered_directory, "eu-central-1"), output_directory: File.join(rendered_directory, "eu-central-1/transaction-events"), spp: false, spp_base_root: File.join(rendered_directory, "eu-central-1/prod/orange/spp/SPP-PLACEHOLDER") }
+          { base_root: File.join(rendered_directory, "us-east-1", "prod", "orange"),    output_directory: File.join(rendered_directory, "us-east-1/transaction-events"),    spp: false, spp_base_root: File.join(rendered_directory, "us-east-1/prod/orange/spp/SPP-PLACEHOLDER") },
+          { base_root: File.join(rendered_directory, "eu-central-1", "prod", "orange"), output_directory: File.join(rendered_directory, "eu-central-1/transaction-events"), spp: false, spp_base_root: File.join(rendered_directory, "eu-central-1/prod/orange/spp/SPP-PLACEHOLDER") }
         )
       end
     end
