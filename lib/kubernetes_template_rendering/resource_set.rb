@@ -74,12 +74,13 @@ module KubernetesTemplateRendering
 
     # Bounded reconcile scope roots for this entry, one per region × color.
     #
-    # The sweep root is the parent directory of the entry's rendered `output_directory`, derived
-    # from the actual `directory:` pattern rather than assuming a fixed layout. For a
-    # `.../<service>` pattern that parent is the `<region>/<cluster_type>/<color>` base; for a
-    # `<region>/<service>` pattern it is `<region>`. The parent is shared with sibling entries, so
-    # leftovers from a deleted/renamed entry under it are swept. The renderer validates each
-    # `base_root` stays within `rendered_directory` (out-of-prefix, full or relative, is a hard error).
+    # The sweep root is the entry's canonical base — `<region>/<cluster_type>/<color>` for a non-SPP
+    # entry, or `<region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER` for an SPP one — independent of
+    # how deep the `subdirectory:` nests. Anchoring at the canonical base (rather than the rendered
+    # `output_directory`'s parent) keeps the sweep root fixed when a `subdirectory:` is renamed or
+    # nested deeper, so leftovers at the old shallower path are still swept. The renderer validates
+    # that the `output_directory` actually falls within this root before sweeping (an entry that
+    # renders elsewhere — only reachable via the deprecated `directory:` field — is a hard error).
     #
     # Each scope also carries `spp:` (whether this entry is an SPP definition) and `spp_base_root:`
     # (the canonical `<region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER` prefix for that region ×
@@ -88,8 +89,10 @@ module KubernetesTemplateRendering
       @regions.flat_map do |plain_region|
         @colors.map do |c|
           output_directory = File.join(@rendered_directory, format(@target_output_directory, plain_region: plain_region, color: c, type: @kubernetes_cluster_type))
+          base_path        = File.join(@rendered_directory, format(BASE_OUTPUT_DIRECTORY, plain_region: plain_region, color: c, type: @kubernetes_cluster_type))
           spp_base_root    = File.join(@rendered_directory, format(SPP_BASE_OUTPUT_DIRECTORY, plain_region: plain_region, color: c, type: @kubernetes_cluster_type))
-          { base_root: File.dirname(output_directory), output_directory: output_directory, spp: @spp, spp_base_root: spp_base_root }
+          base_root        = @spp ? spp_base_root : base_path
+          { base_root: base_root, output_directory: output_directory, spp: @spp, spp_base_root: spp_base_root }
         end
       end
     end
