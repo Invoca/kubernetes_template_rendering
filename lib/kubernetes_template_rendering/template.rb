@@ -4,7 +4,6 @@ require "ostruct"
 require "open3"
 require "shellwords"
 require "yaml"
-require "active_support"
 require "active_support/core_ext/hash/deep_merge"
 
 # This is a base class for all Templates. Derived classes must implement the render method.

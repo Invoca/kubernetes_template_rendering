@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "json"
-require "active_support"
 require "active_support/core_ext/hash/deep_merge"
 
 module KubernetesTemplateRendering

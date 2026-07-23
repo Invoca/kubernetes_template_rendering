@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "json"
+
 require_relative "template_directory_renderer"
 require_relative "cli_arguments"
 require_relative "variable_override_parser"
@@ -91,7 +93,7 @@ module KubernetesTemplateRendering
         end
 
         if args.variable_overrides&.any?
-          puts "Variable overrides (deep-merged after definitions.yaml): #{args.variable_overrides.to_json}"
+          puts "Variable overrides (deep-merged after definitions.yaml): #{JSON.generate(args.variable_overrides)}"
         end
 
         [renderer_from_args(args), args]

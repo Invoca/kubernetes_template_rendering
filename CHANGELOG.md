@@ -4,7 +4,7 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.0] - <merge date>
+## [0.7.0] - 2026-07-23
 ### Added
 - `--variable-override` now supports dotted-path keys (`components.webServer.hpa.minReplicas:2`) that deep-merge into nested variables, with JSON value coercion (integers, floats, booleans, `null`, quoted strings; non-JSON values stay raw strings) and `\.` escaping for literal dots. Plain `KEY:VALUE` (no dot) behaves exactly as before: top-level key, raw string value.
 - Added `--variable-override-json '<json object>'` (repeatable), deep-merged with all other override flags in command-line order (later flags win). Use it for values containing commas or whole structures.
