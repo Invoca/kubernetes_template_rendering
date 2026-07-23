@@ -208,6 +208,16 @@ RSpec.describe KubernetesTemplateRendering::Template do
         end
       end
 
+      context "with nested path keys in multi file rendering" do
+        let(:path) { File.expand_path("../fixtures/jsonnet/nested_path_multi_file_example.jsonnet", __dir__) }
+        let(:hash) { { "name" => "pnapi" } }
+
+        it "returns hash keys containing directory separators, untouched" do
+          expect(render_template.keys).to contain_exactly("pr-1/app/service.yaml", "pr-1/mysql/pnapi-database.yaml")
+          expect(YAML.load(render_template["pr-1/app/service.yaml"])).to eq("name" => "pnapi-service")
+        end
+      end
+
       context "with nested multi file rendering" do
         let(:path) { File.expand_path("../fixtures/jsonnet/nested_multi_file_example.jsonnet", __dir__) }
         let(:hash) { { name: "pnapi", container_name: "app", container_sha: "abcd1234" } }

@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "fileutils"
+require "tmpdir"
+
 require_relative "../../lib/kubernetes_template_rendering/resource"
 require_relative "../../lib/kubernetes_template_rendering/cli_arguments"
 
@@ -49,5 +52,36 @@ RSpec.describe KubernetesTemplateRendering::Resource do
     let(:expected_filename) { "template-deploy.yaml" }
 
     include_examples "resource render"
+  end
+
+  context "when a multi-file template returns nested path keys" do
+    subject(:resource) do
+      described_class.new(
+        template_path: template_path,
+        definitions_path: definitions_path,
+        variables: variables,
+        output_directory: output_directory
+      )
+    end
+    let(:output_directory) { Dir.mktmpdir }
+
+    after { FileUtils.remove_entry(output_directory) }
+
+    it "creates intermediate directories and writes nested and flat files" do
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "pr-1/app/foo.yaml" => "nested contents", "bar.yaml" => "flat contents" })
+
+      resource.render(args)
+
+      expect(File.read(File.join(output_directory, "pr-1/app/foo.yaml"))).to eq("nested contents")
+      expect(File.read(File.join(output_directory, "bar.yaml"))).to eq("flat contents")
+    end
+
+    it "raises when a filename escapes the output directory" do
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "../evil.yaml" => "contents" })
+
+      expect { resource.render(args) }.to raise_error(ArgumentError, /escapes output directory/)
+    end
   end
 end
