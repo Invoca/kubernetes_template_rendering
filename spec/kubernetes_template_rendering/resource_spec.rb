@@ -83,5 +83,31 @@ RSpec.describe KubernetesTemplateRendering::Resource do
 
       expect { resource.render(args) }.to raise_error(ArgumentError, /escapes output directory/)
     end
+
+    it "raises when a filename is exactly '..'" do
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ ".." => "contents" })
+
+      expect { resource.render(args) }.to raise_error(ArgumentError, /escapes output directory/)
+    end
+
+    it "neutralizes an absolute-looking filename by nesting it under the output directory" do
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "/etc/passwd" => "not actually /etc/passwd" })
+
+      resource.render(args)
+
+      expect(File.read(File.join(output_directory, "etc/passwd"))).to eq("not actually /etc/passwd")
+      expect(File.exist?("/etc/passwd_should_never_be_written")).to be false
+    end
+
+    it "writes deeply nested paths" do
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "a/b/c/d/e/f.yaml" => "deep contents" })
+
+      resource.render(args)
+
+      expect(File.read(File.join(output_directory, "a/b/c/d/e/f.yaml"))).to eq("deep contents")
+    end
   end
 end
