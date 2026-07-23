@@ -34,7 +34,7 @@ RSpec.describe KubernetesTemplateRendering::Resource do
       template_output = "rendered output"
       expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render).with(template_path, variables, jsonnet_library_path: jsonnet_library_path, variable_overrides: {}, source_repo: nil).and_return(template_output)
 
-      expect(File).to receive(:write).with("dir/#{expected_filename}", template_output)
+      expect(File).to receive(:write).with(File.expand_path("dir/#{expected_filename}"), template_output)
 
       resource.render(args)
     end
@@ -93,6 +93,39 @@ RSpec.describe KubernetesTemplateRendering::Resource do
         .and_return({ "#{symlink_name}/pwned.yaml" => "escaped contents" })
 
       expect { resource.render(args) }.to raise_error(ArgumentError, /escapes output directory/)
+      expect(Dir.glob(File.join(outside_directory, "**", "*"))).to be_empty
+    ensure
+      FileUtils.remove_entry(outside_directory) if outside_directory
+    end
+
+    it "writes to the lexically expanded path when .. follows a symlink segment" do
+      outside_parent = Dir.mktmpdir
+      outside_directory = File.join(outside_parent, "evil")
+      FileUtils.mkdir_p(outside_directory)
+      File.symlink(outside_directory, File.join(output_directory, "a"))
+
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "a/../b/foo.yaml" => "contents" })
+
+      resource.render(args)
+
+      expect(File.read(File.join(output_directory, "b/foo.yaml"))).to eq("contents")
+      expect(File.exist?(File.join(outside_parent, "b/foo.yaml"))).to be false
+    ensure
+      FileUtils.remove_entry(outside_parent) if outside_parent
+    end
+
+    it "writes to the lexically expanded path when .. appears between symlink segments" do
+      outside_directory = Dir.mktmpdir
+      FileUtils.mkdir_p(File.join(output_directory, "link2"))
+      File.symlink(outside_directory, File.join(output_directory, "link1"))
+
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "link1/../link2/pwn.yaml" => "contents" })
+
+      resource.render(args)
+
+      expect(File.read(File.join(output_directory, "link2/pwn.yaml"))).to eq("contents")
       expect(Dir.glob(File.join(outside_directory, "**", "*"))).to be_empty
     ensure
       FileUtils.remove_entry(outside_directory) if outside_directory

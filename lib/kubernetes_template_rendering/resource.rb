@@ -78,7 +78,7 @@ module KubernetesTemplateRendering
       end
 
       validate_resolved_containment!(File.dirname(expanded), base, filename)
-      path
+      expanded
     end
 
     def validate_resolved_containment!(target_dir, base, filename)

@@ -126,12 +126,14 @@ Chosen option: **Option A (implement nested output)**, because all four "small" 
 
 ## Path safety
 
-`File.join` + `File.write` would follow `..` out of the output directory without a guard (`File.expand_path("dir/../evil", "/base")` → `/base/evil`). `output_path` applies two layers of containment before any write:
+`File.join` + `File.write` would follow `..` out of the output directory without a guard (`File.expand_path("dir/../evil", "/base")` → `/base/evil`). `output_path` applies two layers of containment before any write, then **returns the same lexically expanded path that was validated** (not the raw `File.join` result):
 
 1. **Lexical check** — `File.expand_path` on the joined path must stay under the expanded output directory (catches `..` segments and absolute-looking keys after `File.join` neutralization).
 2. **Filesystem check** — walk each existing path component from the output directory toward the target file's parent directory; reject if any component is a symlink, and verify the resolved parent directory (via `File.realpath` on existing segments) still lies under the real output directory. This closes a bypass where a committed symlink inside a `*-kubernetes` checkout could let a producer-controlled nested key write outside the render sandbox — `File.expand_path` alone never resolves symlinks.
 
-Absolute-looking keys (`/etc/passwd`) are neutralized by `File.join` semantics (`File.join("dir", "/etc/passwd")` → `"dir/etc/passwd"`) and then subject to the same guards.
+**Return-value alignment:** an earlier implementation validated `expanded` but returned the raw `path` from `File.join`. That reopened an escape when a key contained both `..` and a symlink segment (e.g. `a/../b/foo.yaml` with `a` → outside): lexical expansion folds the key to `<output_dir>/b/foo.yaml` (passing all checks), but `File.write` on the unvalidated raw path resolves the symlink before applying `..`, landing outside the sandbox. The fix is to return `expanded` so the write target exactly matches what was validated. Redundant-but-safe segments (`a/./b`, `a//b`) normalize away via `File.expand_path` without changing the logical destination.
+
+Absolute-looking keys (`/etc/passwd`) are neutralized by `File.join` semantics (`File.join("dir", "/etc/passwd")` → `"dir/etc/passwd"`, not an absolute path) and then subject to the same guards.
 
 **Per-key atomicity:** for multi-file hashes, each key is validated immediately before its own write. A later key that fails containment does not roll back files already written for earlier keys in the same hash.
 
