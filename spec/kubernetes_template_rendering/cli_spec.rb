@@ -212,4 +212,51 @@ RSpec.describe KubernetesTemplateRendering::CLI do
       expect(args.only).to eq([])
     end
   end
+
+  describe "--variable-override parsing" do
+    # required by the file-wide before-hook, which consumes `options`; copied from the --only block's let
+    let(:options) { [render_option, template_directory_option] }
+
+    before do
+      FileUtils.mkdir_p(template_directory_option)
+      FileUtils.touch(File.join(template_directory_option, described_class::DEFINITIONS_FILENAME))
+    end
+
+    it "keeps legacy top-level string overrides unchanged, including comma-splitting" do
+      _, args = described_class.send(:parse, [render_option, "--variable-override=deploySha:abc123,rails_env:staging", template_directory_option])
+      expect(args.variable_overrides).to eq("deploySha" => "abc123", "rails_env" => "staging")
+    end
+
+    it "deep-merges dotted-path and JSON overrides in command-line order" do
+      options = [
+        render_option,
+        "--variable-override=deploySha:abc123",
+        '--variable-override-json={"components":{"webServer":{"hpa":{"minReplicas":1,"maxReplicas":4}}}}',
+        "--variable-override=components.webServer.hpa.minReplicas:2",
+        template_directory_option
+      ]
+      _, args = described_class.send(:parse, options)
+      expect(args.variable_overrides).to eq(
+        "deploySha"  => "abc123",
+        "components" => { "webServer" => { "hpa" => { "minReplicas" => 2, "maxReplicas" => 4 } } }
+      )
+    end
+
+    it "echoes the parsed overrides to stdout" do
+      expect(described_class).to receive(:puts).with(/\AVariable overrides \(deep-merged after definitions\.yaml\): /)
+      described_class.send(:parse, [render_option, "--variable-override=deploySha:abc", template_directory_option])
+    end
+
+    it "exits 1 with a STDERR message for invalid --variable-override-json" do
+      expect(STDERR).to receive(:puts).with(/not valid JSON/)
+      expect { described_class.send(:parse, [render_option, "--variable-override-json={nope", template_directory_option]) }
+        .to raise_exception(SystemExit)
+    end
+
+    it "exits 1 with a STDERR message for an empty dotted-path segment" do
+      expect(STDERR).to receive(:puts).with(/empty path segment/)
+      expect { described_class.send(:parse, [render_option, "--variable-override=a..b:1", template_directory_option]) }
+        .to raise_exception(SystemExit)
+    end
+  end
 end

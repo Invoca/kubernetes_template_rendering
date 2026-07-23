@@ -62,6 +62,29 @@ RSpec.describe KubernetesTemplateRendering::Template do
         end
       end
 
+      context "when variable overrides are nested" do
+        let(:hash) do
+          { "components" => { "webServer" => { "hpa" => { "minReplicas" => 1, "maxReplicas" => 4 } } } }
+        end
+        let(:variable_overrides) do
+          { "components" => { "webServer" => { "hpa" => { "minReplicas" => 2 } } } }
+        end
+
+        it "deep-merges overrides so sibling keys survive" do
+          expect(template.variables).to eq(
+            "components" => { "webServer" => { "hpa" => { "minReplicas" => 2, "maxReplicas" => 4 } } }
+          )
+        end
+      end
+
+      context "when a legacy override collides with a top-level key" do
+        let(:variable_overrides) { { "a" => "override" } }
+
+        it "replaces the value exactly as before" do
+          expect(template.variables).to eq("a" => "override", "b" => "value2")
+        end
+      end
+
       it "reads the template, renders the ERB template, and sorts the keys" do
         return_erb_on_file_read
         expected_json_doc = { a: "value1", b: "value2" }
@@ -168,6 +191,19 @@ RSpec.describe KubernetesTemplateRendering::Template do
           it "does not add a variable-overrides comment to any rendered file" do
             expect(render_template["service.yaml"]).to_not include("# Variable overrides used:")
             expect(render_template["pnapi-service-monitor.yaml"]).to_not include("# Variable overrides used:")
+          end
+        end
+
+        context "when variable overrides are provided as string-keyed variables" do
+          let(:hash) { { "name" => "pnapi", "container_name" => "app", "container_sha" => "abcd1234" } }
+          let(:variable_overrides) { { "container_sha" => "deadbeef" } }
+
+          it "applies the override to the rendered jsonnet output" do
+            expect(YAML.load(render_template["service.yaml"])["container"]["sha"]).to eq("deadbeef")
+          end
+
+          it "still does not add a variable-overrides comment" do
+            expect(render_template["service.yaml"]).to_not include("# Variable overrides used:")
           end
         end
       end
