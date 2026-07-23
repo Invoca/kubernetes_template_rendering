@@ -131,6 +131,33 @@ RSpec.describe KubernetesTemplateRendering::Resource do
       FileUtils.remove_entry(outside_directory) if outside_directory
     end
 
+    it "collapses .. through two distinct symlinked segments without touching either target" do
+      outside_1 = Dir.mktmpdir
+      outside_2 = Dir.mktmpdir
+      FileUtils.mkdir_p(File.join(output_directory, "real_mid"))
+      File.symlink(outside_1, File.join(output_directory, "link_a"))
+      File.symlink(outside_2, File.join(output_directory, "real_mid", "link_b"))
+
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "link_a/../real_mid/link_b/../x.yaml" => "contents" })
+
+      resource.render(args)
+
+      expect(File.read(File.join(output_directory, "real_mid/x.yaml"))).to eq("contents")
+      expect(Dir.glob(File.join(outside_1, "**", "*"))).to be_empty
+      expect(Dir.glob(File.join(outside_2, "**", "*"))).to be_empty
+    ensure
+      FileUtils.remove_entry(outside_1) if outside_1
+      FileUtils.remove_entry(outside_2) if outside_2
+    end
+
+    it "raises when a filename's .. segments resolve exactly to the output directory itself" do
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "sub/.." => "contents" })
+
+      expect { resource.render(args) }.to raise_error(ArgumentError, /escapes output directory/)
+    end
+
     it "raises when a filename is exactly '..'" do
       expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
         .and_return({ ".." => "contents" })
