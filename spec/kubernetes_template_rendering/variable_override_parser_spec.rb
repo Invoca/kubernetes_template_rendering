@@ -94,6 +94,31 @@ RSpec.describe KubernetesTemplateRendering::VariableOverrideParser do
           expect { merge(raw) }.to raise_error(described_class::ParseError, /empty path segment/)
         end
       end
+
+      it "JSON-coerces an array value into a nested path" do
+        merge("a.list:[1,2,3]")
+        expect(overrides).to eq("a" => { "list" => [1, 2, 3] })
+      end
+
+      it "keeps a trailing backslash literal when it is not immediately followed by a path dot" do
+        merge('a.b\:val')
+        expect(overrides).to eq("a" => { 'b\\' => "val" })
+      end
+
+      it "handles a segment-ending escaped dot" do
+        merge('a.b\.:val')
+        expect(overrides).to eq("a" => { "b." => "val" })
+      end
+
+      it "supports non-ASCII characters in path segments and values" do
+        merge("emoji.\u{1F600}:h\u00e9llo")
+        expect(overrides).to eq("emoji" => { "\u{1F600}" => "h\u00e9llo" })
+      end
+
+      it "keeps an empty string value as the raw string, not nil" do
+        merge("a.b:")
+        expect(overrides).to eq("a" => { "b" => "" })
+      end
     end
   end
 
@@ -113,6 +138,12 @@ RSpec.describe KubernetesTemplateRendering::VariableOverrideParser do
     it "raises ParseError for a non-object JSON value" do
       expect { described_class.merge_json!(overrides, "[1,2]") }
         .to raise_error(described_class::ParseError, /must be a JSON object/)
+    end
+
+    it "replaces an array wholesale rather than concatenating on a later merge" do
+      described_class.merge_json!(overrides, '{"a":{"list":[1,2]}}')
+      described_class.merge_json!(overrides, '{"a":{"list":[3]}}')
+      expect(overrides).to eq("a" => { "list" => [3] })
     end
   end
 end
