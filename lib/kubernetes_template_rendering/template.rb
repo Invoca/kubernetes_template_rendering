@@ -4,6 +4,8 @@ require "ostruct"
 require "open3"
 require "shellwords"
 require "yaml"
+require "active_support"
+require "active_support/core_ext/hash/deep_merge"
 
 # This is a base class for all Templates. Derived classes must implement the render method.
 module KubernetesTemplateRendering
@@ -12,7 +14,7 @@ module KubernetesTemplateRendering
 
     def initialize(template_path, variables, source_repo: nil, variable_overrides: {})
       @template_path      = template_path
-      @variables          = variables.merge(variable_overrides)
+      @variables          = variables.deep_merge(variable_overrides)
       @source_repo        = source_repo
       @variable_overrides = variable_overrides
     end

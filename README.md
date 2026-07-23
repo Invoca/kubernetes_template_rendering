@@ -71,6 +71,43 @@ Useful when one `--cluster_type` matches multiple sibling entries (e.g. `staging
 
 If an `--only` value matches no entry across any template directory, the gem raises with the list of valid keys so the caller can self-correct.
 
+### Variable overrides
+
+Pass `--variable-override KEY:VALUE` (repeatable) to override values from `definitions.yaml` after all per-section variables and auto-injected region/cluster vars are resolved. Overrides always win.
+
+**Legacy form (no dot in KEY):** sets a top-level key to the raw string value — exactly the pre-0.7.0 behavior. Values are never type-coerced (`deploySha:12345` stays the string `"12345"`; `enabled:true` stays `"true"`). The value is everything after the first colon (`image:registry:5000/app` → `"registry:5000/app"`). Arguments with no colon are silently ignored.
+
+```bash
+gem exec -g kubernetes_template_rendering render_templates \
+    --rendered-directory path/to/resources \
+    --variable-override deploySha:abc123 \
+    deployment/templates
+```
+
+**Dotted-path form (KEY contains `.`):** the key is split on unescaped dots into a nested path and deep-merged into variables. The value is JSON-coerced when it parses as JSON (`2` → integer, `true`/`false` → booleans, `null` → nil, `"2"` → string); otherwise the raw string is kept (`hello` → `"hello"`, `02` → `"02"`).
+
+```bash
+gem exec -g kubernetes_template_rendering render_templates \
+    --rendered-directory path/to/resources \
+    --variable-override components.webServer.hpa.minReplicas:2 \
+    deployment/templates
+```
+
+Escape literal dots in a segment with `\.` (e.g. `metadata.labels.app\.kubernetes\.io/name:foo`). Only `\.` is an escape sequence; all other backslashes — including trailing ones — are kept literally. Keys that would need a literal backslash immediately before a path-splitting dot must use `--variable-override-json` instead.
+
+**`--variable-override-json` (repeatable):** deep-merges a JSON object. Use this for values containing commas or whole arrays/objects (the legacy Array acceptor comma-splits `KEY:VALUE` arguments).
+
+```bash
+gem exec -g kubernetes_template_rendering render_templates \
+    --rendered-directory path/to/resources \
+    --variable-override-json '{"ephemeral":{"mysql":{"enabled":true}}}' \
+    deployment/templates
+```
+
+**Precedence:** all override flags are folded into one hash in command-line order via deep merge (later flags win on conflict), then deep-merged last over the fully-resolved variables.
+
+Overrides are echoed once to stdout at render start (`Variable overrides (deep-merged after definitions.yaml): {...}`). Rendered files carry no override comment (removed in [0.3.0](CHANGELOG.md#030---2026-06-24) to avoid content-free diffs on every deploy).
+
 ### Staging Partial Platforms
 
 Pass `--spp NAME` (repeatable) to expand any entry whose `definitions.yaml` name contains `SPP-PLACEHOLDER` into a per-SPP sibling output. Substitutes `SPP-PLACEHOLDER` with `NAME` and the `PLACEHOLDER` suffix with the suffix of `NAME` (everything after the last `-`), in both file paths and contents. Source mtimes are preserved.

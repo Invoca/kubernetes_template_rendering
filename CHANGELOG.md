@@ -4,6 +4,15 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - <merge date>
+### Added
+- `--variable-override` now supports dotted-path keys (`components.webServer.hpa.minReplicas:2`) that deep-merge into nested variables, with JSON value coercion (integers, floats, booleans, `null`, quoted strings; non-JSON values stay raw strings) and `\.` escaping for literal dots. Plain `KEY:VALUE` (no dot) behaves exactly as before: top-level key, raw string value.
+- Added `--variable-override-json '<json object>'` (repeatable), deep-merged with all other override flags in command-line order (later flags win). Use it for values containing commas or whole structures.
+- Overrides are echoed once to stdout at render start (`Variable overrides (deep-merged after definitions.yaml): {...}`). Rendered files still carry no override comment (see 0.3.0).
+
+### Changed
+- `Template#initialize` merges `variable_overrides` with `deep_merge` instead of `merge`. Behavior-identical for all previously-valid inputs (legacy override values are always strings, so no hash-vs-hash merge could occur).
+
 ## [0.6.2] - 2026-07-15
 ### Fixed
 - Fixed the `--reconcile` sweep root for entries whose `subdirectory:` nests more than one level deep (e.g. `subdirectory: exclude-argocd/auth`). The sweep root is now the entry's canonical base — `<region>/<cluster_type>/<color>` for non-SPP entries and `<region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER` for SPP entries — regardless of `subdirectory:` depth, rather than the immediate parent of the rendered output directory. Previously a nested `subdirectory:` pushed the sweep root one level too deep, so when a `subdirectory:` was renamed or nested deeper the files left at the old shallower path were siblings of the sweep root and were never swept.
