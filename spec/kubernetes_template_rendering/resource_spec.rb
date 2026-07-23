@@ -84,6 +84,20 @@ RSpec.describe KubernetesTemplateRendering::Resource do
       expect { resource.render(args) }.to raise_error(ArgumentError, /escapes output directory/)
     end
 
+    it "raises when a filename traverses a symlink inside the output directory" do
+      outside_directory = Dir.mktmpdir
+      symlink_name = "evil_link"
+      File.symlink(outside_directory, File.join(output_directory, symlink_name))
+
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "#{symlink_name}/pwned.yaml" => "escaped contents" })
+
+      expect { resource.render(args) }.to raise_error(ArgumentError, /escapes output directory/)
+      expect(Dir.glob(File.join(outside_directory, "**", "*"))).to be_empty
+    ensure
+      FileUtils.remove_entry(outside_directory) if outside_directory
+    end
+
     it "raises when a filename is exactly '..'" do
       expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
         .and_return({ ".." => "contents" })

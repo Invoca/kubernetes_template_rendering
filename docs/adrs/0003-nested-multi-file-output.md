@@ -126,9 +126,14 @@ Chosen option: **Option A (implement nested output)**, because all four "small" 
 
 ## Path safety
 
-`File.join` + `File.write` would follow `..` out of the output directory without a guard (`File.expand_path("dir/../evil", "/base")` → `/base/evil`). `output_path` now expands both paths and raises `ArgumentError` with message `output filename ... escapes output directory ...` before any write, consistent with reconcile's out-of-scope hard errors.
+`File.join` + `File.write` would follow `..` out of the output directory without a guard (`File.expand_path("dir/../evil", "/base")` → `/base/evil`). `output_path` applies two layers of containment before any write:
 
-Absolute-looking keys (`/etc/passwd`) are neutralized by `File.join` semantics (`File.join("dir", "/etc/passwd")` → `"dir/etc/passwd"`) and then subject to the same guard.
+1. **Lexical check** — `File.expand_path` on the joined path must stay under the expanded output directory (catches `..` segments and absolute-looking keys after `File.join` neutralization).
+2. **Filesystem check** — walk each existing path component from the output directory toward the target file's parent directory; reject if any component is a symlink, and verify the resolved parent directory (via `File.realpath` on existing segments) still lies under the real output directory. This closes a bypass where a committed symlink inside a `*-kubernetes` checkout could let a producer-controlled nested key write outside the render sandbox — `File.expand_path` alone never resolves symlinks.
+
+Absolute-looking keys (`/etc/passwd`) are neutralized by `File.join` semantics (`File.join("dir", "/etc/passwd")` → `"dir/etc/passwd"`) and then subject to the same guards.
+
+**Per-key atomicity:** for multi-file hashes, each key is validated immediately before its own write. A later key that fails containment does not roll back files already written for earlier keys in the same hash.
 
 ## Pros and Cons of the Options
 
