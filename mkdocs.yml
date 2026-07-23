@@ -4,6 +4,7 @@ site_description: "A light weight gem used to render Kubernetes manifest templat
 nav:
 - Introduction: README.md
 - Change Log: CHANGELOG.md
+- Nested Output Decision: adrs/0003-nested-multi-file-output.md
 
 plugins:
   - techdocs-core

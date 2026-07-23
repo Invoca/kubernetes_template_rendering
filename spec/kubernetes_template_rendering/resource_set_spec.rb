@@ -599,4 +599,50 @@ RSpec.describe KubernetesTemplateRendering::ResourceSet do
       resource_set.render(args)
     end
   end
+
+  describe "nested MULTI_FILE_RENDER path keys" do
+    let(:template_directory) { Dir.mktmpdir }
+    let(:rendered_directory) { Dir.mktmpdir }
+    let(:definitions_path) { File.join(template_directory, "definitions.yaml") }
+    let(:nested_fixture) { File.expand_path("../fixtures/jsonnet/nested_path_multi_file_example.jsonnet", __dir__) }
+    let(:args) { KubernetesTemplateRendering::CLIArguments.new(rendered_directory, template_directory, false, '') }
+
+    before do
+      stub_puts
+      allow(FileUtils).to receive(:mkdir_p).and_call_original
+      allow(File).to receive(:exist?).and_call_original
+      FileUtils.cp(nested_fixture, File.join(template_directory, "nested.jsonnet"))
+      File.write(
+        definitions_path,
+        {
+          "staging" => {
+            "regions" => ["us-east-1"],
+            "colors" => ["orange"],
+            "variables" => { "name" => "pnapi" }
+          }
+        }.to_yaml
+      )
+    end
+
+    after do
+      FileUtils.remove_entry(template_directory)
+      FileUtils.remove_entry(rendered_directory)
+    end
+
+    it "writes nested paths under the standard region/cluster_type/color base" do
+      resource_set = described_class.new(
+        config: { "regions" => ["us-east-1"], "colors" => ["orange"], "variables" => { "name" => "pnapi" } },
+        rendered_directory: rendered_directory,
+        template_directory: template_directory,
+        definitions_path: definitions_path,
+        kubernetes_cluster_type: "staging"
+      )
+
+      resource_set.render(args)
+
+      base = File.join(rendered_directory, "us-east-1", "staging", "orange")
+      expect(File.read(File.join(base, "pr-1/app/service.yaml"))).to include("pnapi-service")
+      expect(File.read(File.join(base, "pr-1/mysql/pnapi-database.yaml"))).to include("kind: Deployment")
+    end
+  end
 end
