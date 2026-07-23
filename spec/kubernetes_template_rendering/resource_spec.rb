@@ -123,5 +123,66 @@ RSpec.describe KubernetesTemplateRendering::Resource do
 
       expect(File.read(File.join(output_directory, "a/b/c/d/e/f.yaml"))).to eq("deep contents")
     end
+
+    it "raises when a symlink is several directory levels deep, not the immediate child" do
+      outside_directory = Dir.mktmpdir
+      FileUtils.mkdir_p(File.join(output_directory, "a", "b"))
+      File.symlink(outside_directory, File.join(output_directory, "a", "b", "evil_link"))
+
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "a/b/evil_link/pwned.yaml" => "escaped contents" })
+
+      expect { resource.render(args) }.to raise_error(ArgumentError, /escapes output directory/)
+      expect(Dir.glob(File.join(outside_directory, "**", "*"))).to be_empty
+    ensure
+      FileUtils.remove_entry(outside_directory) if outside_directory
+    end
+
+    it "raises for a dangling symlink (target does not exist) inside the output directory" do
+      File.symlink("/tmp/does-not-exist-anywhere-xyz", File.join(output_directory, "dangling_link"))
+
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "dangling_link/pwned.yaml" => "escaped contents" })
+
+      expect { resource.render(args) }.to raise_error(ArgumentError, /escapes output directory/)
+    end
+
+    it "raises for a chain of symlinks (symlink -> symlink -> outside)" do
+      outside_directory = Dir.mktmpdir
+      link2 = File.join(output_directory, "link2")
+      link1 = File.join(output_directory, "link1")
+      File.symlink(outside_directory, link2)
+      File.symlink(link2, link1)
+
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "link1/pwned.yaml" => "escaped contents" })
+
+      expect { resource.render(args) }.to raise_error(ArgumentError, /escapes output directory/)
+      expect(Dir.glob(File.join(outside_directory, "**", "*"))).to be_empty
+    ensure
+      FileUtils.remove_entry(outside_directory) if outside_directory
+    end
+
+    it "still writes correctly when output_directory itself is reached via a symlink" do
+      real_target = Dir.mktmpdir
+      symlinked_output_directory = File.join(Dir.mktmpdir, "symlinked_output")
+      File.symlink(real_target, symlinked_output_directory)
+      symlinked_resource = described_class.new(
+        template_path: template_path,
+        definitions_path: definitions_path,
+        variables: variables,
+        output_directory: symlinked_output_directory
+      )
+
+      expect(KubernetesTemplateRendering::ErbTemplate).to receive(:render)
+        .and_return({ "pr-1/app/foo.yaml" => "nested via symlinked base" })
+
+      symlinked_resource.render(args)
+
+      expect(File.read(File.join(real_target, "pr-1/app/foo.yaml"))).to eq("nested via symlinked base")
+    ensure
+      FileUtils.remove_entry(real_target) if real_target
+      FileUtils.remove_entry(File.dirname(symlinked_output_directory)) if symlinked_output_directory
+    end
   end
 end
