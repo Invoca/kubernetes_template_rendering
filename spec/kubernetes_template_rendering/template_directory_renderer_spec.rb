@@ -6,7 +6,8 @@ require_relative "../../lib/kubernetes_template_rendering/template_directory_ren
 require_relative "../../lib/kubernetes_template_rendering/cli_arguments"
 
 RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
-  subject(:dir_renderer) { described_class.new(directories: [template_directory], rendered_directory: rendered_directory) }
+  subject(:dir_renderer) { described_class.new(directories: [template_directory], rendered_directory: rendered_directory, spps: spps) }
+  let(:spps) { ["staging-qa02a"] }
   let(:rendered_directory) { Dir.mktmpdir }
   let(:template_directory) { Dir.mktmpdir }
   let(:args) { KubernetesTemplateRendering::CLIArguments.new(rendered_directory, template_directory, false, '') }
@@ -21,13 +22,19 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
     FileUtils.rm_r(template_directory)
   end
 
-  { "test": "test", "prod.gcp": "prod", "SPP-PLACEHOLDER": "staging", "SPP-PLACEHOLDER.eu": "staging" }.each do |resource_definition_name, expected_kubernetes_cluster_type|
-    it "builds a ResourceSet with an appropriate kubernetes_cluster_type for each directory and calls render on it" do
-      definition = build_definition(name: resource_definition_name.to_s, rendered_directory: rendered_directory, template_directory: template_directory, variables: variables)
+  {
+    "test"               => { cluster_type: "test",    spp: false },
+    "prod.gcp"           => { cluster_type: "prod",    spp: false },
+    "staging"            => { cluster_type: "staging", spp: false },
+    "SPP-PLACEHOLDER"    => { cluster_type: "staging", spp: true },
+    "SPP-PLACEHOLDER.eu" => { cluster_type: "staging", spp: true }
+  }.each do |resource_definition_name, expected|
+    it "builds a ResourceSet with spp=#{expected[:spp].inspect} and the right cluster_type for #{resource_definition_name}" do
+      definition = build_definition(name: resource_definition_name, rendered_directory: rendered_directory, template_directory: template_directory, variables: variables)
       definitions_path = File.join(template_directory, described_class::DEFINITIONS_FILENAME)
       File.write(definitions_path, definition.to_yaml)
 
-      expected_config = OpenStruct.new(definition[resource_definition_name.to_s])
+      expected_config = OpenStruct.new(definition[resource_definition_name])
       resource_set = instance_double(KubernetesTemplateRendering::ResourceSet)
 
       expect(resource_set).to receive(:render)
@@ -38,7 +45,9 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
             rendered_directory: rendered_directory,
             template_directory: template_directory,
             definitions_path: definitions_path,
-            kubernetes_cluster_type: expected_kubernetes_cluster_type,
+            kubernetes_cluster_type: expected[:cluster_type],
+            spp: expected[:spp],
+            spps: spps,
             variable_overrides: {},
             source_repo: nil
           )
@@ -47,5 +56,462 @@ RSpec.describe KubernetesTemplateRendering::TemplateDirectoryRenderer do
 
       dir_renderer.render(args)
     end
+  end
+
+  describe "reconcile sweep" do
+    let(:reconcile_args) do
+      KubernetesTemplateRendering::CLIArguments.new(rendered_directory, template_directory, false, '').tap { _1.reconcile = true }
+    end
+
+    before do
+      stub_puts(KubernetesTemplateRendering::ResourceSet)
+      stub_puts(KubernetesTemplateRendering::Resource)
+      stub_puts(KubernetesTemplateRendering::Reconciler)
+    end
+
+    # Each entry maps a definition name to an optional `subdirectory:` segment (nil -> the derived
+    # base path). Names containing SPP-PLACEHOLDER derive the `.../spp/SPP-PLACEHOLDER` base. This
+    # deliberately avoids the deprecated `directory:` field so the specs exercise supported layouts.
+    def write_template_dir(entries, region: "us-east-1")
+      File.write(File.join(template_directory, "app.yaml.erb"), "kind: Test\nname: app\n")
+      definitions = entries.transform_values do |subdirectory|
+        cfg = { "regions" => [region], "colors" => ["orange"], "variables" => {} }
+        cfg["subdirectory"] = subdirectory if subdirectory
+        cfg
+      end
+      File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definitions.to_yaml)
+    end
+
+    def render!
+      described_class.new(directories: [template_directory], rendered_directory: rendered_directory).render(reconcile_args)
+    end
+
+    def age(path)
+      File.utime(Time.now - 3600, Time.now - 3600, path)
+    end
+
+    it "removes the directory of a deleted entry while keeping freshly-rendered output" do
+      # my-app is still rendered; deleted-app is the leftover output of an entry removed upstream.
+      write_template_dir({ "prod" => "my-app" }, region: "us-east-1")
+      base = File.join(rendered_directory, "us-east-1/prod/orange")
+      stale_dir = File.join(base, "deleted-app")
+      stale_file = File.join(stale_dir, "deployment.yaml")
+      FileUtils.mkdir_p(stale_dir)
+      File.write(stale_file, "stale")
+      age(stale_file)
+
+      render!
+
+      expect(File.exist?(File.join(base, "my-app", "app.yaml"))).to be(true)
+      expect(File.exist?(stale_file)).to be(false)
+      expect(File.directory?(stale_dir)).to be(false)
+    end
+
+    it "produces identical results across two consecutive reconcile renders" do
+      write_template_dir({ "prod" => "my-app" }, region: "us-east-1")
+
+      render!
+      first = Dir.glob(File.join(rendered_directory, "**", "*")).sort
+      render!
+      second = Dir.glob(File.join(rendered_directory, "**", "*")).sort
+
+      expect(second).to eq(first)
+    end
+
+    it "hard-errors and deletes nothing when an entry path escapes its scope prefix" do
+      # An out-of-prefix scope is only reachable through the deprecated `directory:` escape hatch
+      # (subdirectory/base paths are always rooted under region/type/color), so this test must use
+      # `directory:` to exercise the guard that defends against exactly that footgun.
+      File.write(File.join(template_directory, "app.yaml.erb"), "kind: Test\nname: app\n")
+      definitions = {
+        "prod" => { "directory" => "../outside/%{plain_region}/%{type}/%{color}/app", "regions" => ["us-east-1"], "colors" => ["orange"], "variables" => {} }
+      }
+      File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definitions.to_yaml)
+      preexisting = File.join(rendered_directory, "us-east-1/prod/orange/keep.yaml")
+      FileUtils.mkdir_p(File.dirname(preexisting))
+      File.write(preexisting, "keep")
+      age(preexisting)
+
+      expect { render! }.to raise_error(KubernetesTemplateRendering::Reconciler::OutOfScopeError)
+      expect(File.exist?(preexisting)).to be(true)
+    end
+
+    describe "SPP layout guard" do
+      # Writes a single definition using the deprecated `directory:` escape hatch (the only way to
+      # produce a non-canonical layout). `name` decides SPP-ness (contains SPP-PLACEHOLDER or not).
+      def write_directory_definition(name, directory)
+        File.write(File.join(template_directory, "app.yaml.erb"), "kind: Test\nname: app\n")
+        definitions = { name => { "directory" => directory, "regions" => ["us-east-1"], "colors" => ["orange"], "variables" => {} } }
+        File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definitions.to_yaml)
+      end
+
+      it "hard-errors and deletes nothing when an SPP entry renders outside the canonical spp/SPP-PLACEHOLDER prefix" do
+        write_directory_definition("SPP-PLACEHOLDER", "%{plain_region}/%{type}/%{color}/notspp/SPP-PLACEHOLDER")
+        preexisting = File.join(rendered_directory, "us-east-1/staging/orange/keep.yaml")
+        FileUtils.mkdir_p(File.dirname(preexisting))
+        File.write(preexisting, "keep")
+        age(preexisting)
+
+        expect { render! }.to raise_error(KubernetesTemplateRendering::Reconciler::SppLayoutError)
+        expect(File.exist?(preexisting)).to be(true)
+      end
+
+      it "allows an SPP entry using directory: when it still resolves to the canonical spp/SPP-PLACEHOLDER prefix" do
+        write_directory_definition("SPP-PLACEHOLDER", "%{plain_region}/%{type}/%{color}/spp/SPP-PLACEHOLDER/frontend")
+
+        expect { render! }.to_not raise_error
+        expect(File.exist?(File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER/frontend/app.yaml"))).to be(true)
+      end
+
+      it "hard-errors when a non-SPP entry renders under an spp/ segment" do
+        write_directory_definition("prod", "%{plain_region}/%{type}/%{color}/spp/sneaky")
+
+        expect { render! }.to raise_error(KubernetesTemplateRendering::Reconciler::SppLayoutError)
+      end
+
+      it "does not run the layout guard without --reconcile (a non-canonical SPP entry still renders)" do
+        write_directory_definition("SPP-PLACEHOLDER", "%{plain_region}/%{type}/%{color}/notspp/SPP-PLACEHOLDER")
+        plain_args = KubernetesTemplateRendering::CLIArguments.new(rendered_directory, template_directory, false, '')
+
+        expect do
+          described_class.new(directories: [template_directory], rendered_directory: rendered_directory).render(plain_args)
+        end.to_not raise_error
+        expect(File.exist?(File.join(rendered_directory, "us-east-1/staging/orange/notspp/SPP-PLACEHOLDER/app.yaml"))).to be(true)
+      end
+    end
+
+    it "fences spp/ subtrees out of the base sweep (deleted-SPP cleanup stays manual)" do
+      # A non-SPP staging entry (named "staging" -> cluster_type staging, spp: false) coexists with a
+      # real SPP instance under the same region/type/color. The base sweep must not touch the spp/ tree.
+      write_template_dir({ "staging" => "my-app" }, region: "us-east-1")
+      spp_file = File.join(rendered_directory, "us-east-1/staging/orange/spp/staging-qa02a/my-app/old.yaml")
+      FileUtils.mkdir_p(File.dirname(spp_file))
+      File.write(spp_file, "spp")
+      age(spp_file)
+
+      render!
+
+      expect(File.exist?(spp_file)).to be(true)
+    end
+
+    it "sweeps stale files inside a rendered SPP entry's own directory" do
+      write_template_dir({ "SPP-PLACEHOLDER" => nil }, region: "us-east-1")
+      stale_spp_file = File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER/old.yaml")
+      FileUtils.mkdir_p(File.dirname(stale_spp_file))
+      File.write(stale_spp_file, "stale")
+      age(stale_spp_file)
+
+      render!
+
+      expect(File.exist?(stale_spp_file)).to be(false)
+    end
+
+    it "sweeps stale files inside the rendered SPP directory while leaving non-rendered sibling SPP directories untouched (TEST CASE 2)" do
+      write_template_dir({ "SPP-PLACEHOLDER" => "my-app" }, region: "us-east-1")
+      spp_base         = File.join(rendered_directory, "us-east-1/staging/orange/spp")
+      stale_file       = File.join(spp_base, "SPP-PLACEHOLDER/my-app/old.yaml")
+      sibling_spp_file = File.join(spp_base, "staging-qa02a/my-app/kept.yaml")
+      FileUtils.mkdir_p(File.dirname(stale_file))
+      FileUtils.mkdir_p(File.dirname(sibling_spp_file))
+      File.write(stale_file, "stale")
+      File.write(sibling_spp_file, "kept")
+      age(stale_file)
+      age(sibling_spp_file)
+
+      render!
+
+      expect(File.exist?(stale_file)).to be(false)       # swept inside rendered SPP
+      expect(File.exist?(sibling_spp_file)).to be(true)  # non-rendered sibling untouched
+    end
+
+    it "under --spp, sweeps stale files in SPP-PLACEHOLDER while keeping fresh placeholder output and leaving unrequested siblings untouched" do
+      write_template_dir({ "SPP-PLACEHOLDER" => "my-app" }, region: "us-east-1")
+      spp_base          = File.join(rendered_directory, "us-east-1/staging/orange/spp")
+      placeholder_stale = File.join(spp_base, "SPP-PLACEHOLDER/my-app/old.yaml")   # stale in placeholder -> swept
+      sibling_spp_file  = File.join(spp_base, "staging-qa10a/my-app/kept.yaml")    # unrequested sibling -> kept
+      FileUtils.mkdir_p(File.dirname(placeholder_stale))
+      FileUtils.mkdir_p(File.dirname(sibling_spp_file))
+      File.write(placeholder_stale, "stale")
+      File.write(sibling_spp_file, "kept")
+      age(placeholder_stale)
+      age(sibling_spp_file)
+
+      described_class.new(directories: [template_directory], rendered_directory: rendered_directory, spps: ["staging-qa02a"]).render(reconcile_args)
+
+      expect(File.exist?(placeholder_stale)).to be(false)                                          # SPP-PLACEHOLDER swept under --spp
+      expect(File.exist?(File.join(spp_base, "SPP-PLACEHOLDER/my-app/app.yaml"))).to be(true)      # freshly rendered placeholder output kept
+      expect(File.exist?(sibling_spp_file)).to be(true)                                            # unrequested sibling untouched
+    end
+
+    it "under --spp, does not delete other already-rendered SPP instances" do
+      write_template_dir({ "SPP-PLACEHOLDER" => "web" }, region: "us-east-1")
+      spp_base = File.join(rendered_directory, "us-east-1/staging/orange/spp")
+
+      # Several SPPs rendered out by previous deploys; back-dated so they predate this run's marker.
+      # If the sweep wrongly included them they would be deleted, so their survival is meaningful.
+      other_spps  = %w[staging-qa10a staging-qa20b staging-prod01]
+      other_files = other_spps.map { |spp| File.join(spp_base, spp, "web", "app.yaml") }
+      other_files.each do |f|
+        FileUtils.mkdir_p(File.dirname(f))
+        File.write(f, "existing")
+        age(f)
+      end
+
+      # Deploy targeting a single SPP.
+      described_class.new(directories: [template_directory], rendered_directory: rendered_directory, spps: ["staging-qa02a"]).render(reconcile_args)
+
+      expect(File.exist?(File.join(spp_base, "staging-qa02a/web/app.yaml"))).to be(true) # requested SPP rendered
+      other_files.each { |f| expect(File.exist?(f)).to be(true) }                        # every other already-rendered SPP left intact
+    end
+
+    # Guards the premise behind sweeping SPP-PLACEHOLDER: it is only safe because SPP-PLACEHOLDER is
+    # re-rendered this run. A region excluded by --region is NOT rendered, so its SPP-PLACEHOLDER tree
+    # is not fresh and must never be swept (would be new data loss on the source-of-truth tree).
+    it "does not sweep SPP-PLACEHOLDER in a region excluded by --region" do
+      File.write(File.join(template_directory, "app.yaml.erb"), "kind: Test\nname: app\n")
+      definitions = {
+        "SPP-PLACEHOLDER" => { "subdirectory" => "my-app", "regions" => ["us-east-1", "eu-central-1"], "colors" => ["orange"], "variables" => {} }
+      }
+      File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definitions.to_yaml)
+
+      excluded_region_file = File.join(rendered_directory, "eu-central-1/staging/orange/spp/SPP-PLACEHOLDER/my-app/keep.yaml")
+      FileUtils.mkdir_p(File.dirname(excluded_region_file))
+      File.write(excluded_region_file, "keep")
+      age(excluded_region_file) # stale relative to the marker; would be deleted if wrongly swept
+
+      described_class.new(
+        directories: [template_directory],
+        rendered_directory: rendered_directory,
+        region: "us-east-1",
+        spps: ["staging-qa02a"]
+      ).render(reconcile_args)
+
+      expect(File.exist?(File.join(rendered_directory, "us-east-1/staging/orange/spp/SPP-PLACEHOLDER/my-app/app.yaml"))).to be(true) # rendered region produced
+      expect(File.exist?(excluded_region_file)).to be(true)                                                                          # excluded region untouched — no data loss
+    end
+
+    # End-to-end TEST CASE 2: a real SPP definition (name contains SPP-PLACEHOLDER, no deprecated
+    # `directory:`) renders into the derived `<region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER`
+    # base path. Without --spp, deleting templates/frontend/frontend-cm.yaml.erb upstream and
+    # re-rendering with --reconcile must delete only the SPP-PLACEHOLDER stale file, re-render the
+    # surviving resource, and leave the expanded SPP instances (staging-qa02a, staging-qa10a) untouched.
+    it "deletes only the SPP-PLACEHOLDER stale file and leaves expanded SPP instances untouched (TEST CASE 2, derived SPP path)" do
+      # frontend-cm.yaml.erb was deleted upstream; only the servicemonitor template remains to render.
+      File.write(File.join(template_directory, "frontend-prometheus-servicemonitor.yaml.erb"), "kind: ServiceMonitor\n")
+      definitions = {
+        "SPP-PLACEHOLDER" => { "subdirectory" => "frontend", "regions" => ["us-east-1"], "colors" => ["orange"], "variables" => {} }
+      }
+      File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definitions.to_yaml)
+
+      spp_root             = File.join(rendered_directory, "us-east-1/staging/orange/spp")
+      placeholder_frontend = File.join(spp_root, "SPP-PLACEHOLDER/frontend")
+      stale_cm             = File.join(placeholder_frontend, "frontend-cm.yaml") # template deleted upstream -> stale
+      expanded_instances   = %w[staging-qa02a staging-qa10a].flat_map do |spp|
+        %w[frontend-cm.yaml frontend-prometheus-servicemonitor.yaml].map { |f| File.join(spp_root, spp, "frontend", f) }
+      end
+
+      ([stale_cm] + expanded_instances).each do |f|
+        FileUtils.mkdir_p(File.dirname(f))
+        File.write(f, "old")
+        age(f)
+      end
+
+      described_class.new(
+        directories: [template_directory],
+        rendered_directory: rendered_directory,
+        cluster_type: "staging",
+        region: "us-east-1",
+        color: "orange"
+      ).render(reconcile_args)
+
+      expect(File.exist?(stale_cm)).to be(false) # stale SPP-PLACEHOLDER resource swept
+      expect(File.exist?(File.join(placeholder_frontend, "frontend-prometheus-servicemonitor.yaml"))).to be(true) # re-rendered
+      expanded_instances.each { |f| expect(File.exist?(f)).to be(true) } # expanded SPP instances untouched
+    end
+
+    # End-to-end TEST CASE 1: deploying to a specific SPP with --spp. frontend-cm.yaml.erb was deleted
+    # upstream, so only the servicemonitor renders. The SPP-PLACEHOLDER tree is always re-rendered (it
+    # is the expansion source), and PlaceholderExpander expands it into spp/staging-qa02a (preserving
+    # mtimes, so the expanded file lands after the marker). Reconcile sweeps SPP-PLACEHOLDER *and* the
+    # requested spp/staging-qa02a. Result: the stale frontend-cm.yaml is deleted from both the
+    # placeholder and the requested SPP, the freshly rendered/expanded servicemonitor survives in both,
+    # and the unrequested staging-qa10a is left intact.
+    it "sweeps the SPP-PLACEHOLDER and requested --spp subtrees while keeping fresh output and leaving other SPPs untouched (TEST CASE 1)" do
+      File.write(File.join(template_directory, "frontend-prometheus-servicemonitor.yaml.erb"), "kind: ServiceMonitor\n")
+      definitions = {
+        "SPP-PLACEHOLDER" => { "subdirectory" => "frontend", "regions" => ["us-east-1"], "colors" => ["orange"], "variables" => {} }
+      }
+      File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definitions.to_yaml)
+
+      spp_root              = File.join(rendered_directory, "us-east-1/staging/orange/spp")
+      requested_stale       = File.join(spp_root, "staging-qa02a/frontend/frontend-cm.yaml")  # in requested SPP -> swept
+      expanded_survivor     = File.join(spp_root, "staging-qa02a/frontend/frontend-prometheus-servicemonitor.yaml") # expanded fresh -> kept
+      placeholder_stale     = File.join(spp_root, "SPP-PLACEHOLDER/frontend/frontend-cm.yaml") # stale in placeholder -> swept
+      placeholder_survivor  = File.join(spp_root, "SPP-PLACEHOLDER/frontend/frontend-prometheus-servicemonitor.yaml") # freshly rendered -> kept
+      other_spp_files       = %w[frontend-cm.yaml frontend-prometheus-servicemonitor.yaml].map do |f|
+        File.join(spp_root, "staging-qa10a/frontend", f) # unrequested SPP -> untouched
+      end
+
+      ([requested_stale, placeholder_stale] + other_spp_files).each do |f|
+        FileUtils.mkdir_p(File.dirname(f))
+        File.write(f, "old")
+        age(f)
+      end
+
+      described_class.new(
+        directories: [template_directory],
+        rendered_directory: rendered_directory,
+        cluster_type: "staging",
+        region: "us-east-1",
+        color: "orange",
+        spps: ["staging-qa02a"]
+      ).render(reconcile_args)
+
+      expect(File.exist?(requested_stale)).to be(false)              # stale cm swept inside requested SPP
+      expect(File.exist?(expanded_survivor)).to be(true)             # freshly expanded resource kept
+      expect(File.exist?(placeholder_stale)).to be(false)            # stale cm swept inside SPP-PLACEHOLDER
+      expect(File.exist?(placeholder_survivor)).to be(true)          # freshly rendered SPP-PLACEHOLDER resource kept
+      other_spp_files.each { |f| expect(File.exist?(f)).to be(true) } # unrequested SPP untouched
+    end
+
+    # Reproduces the reported orphaning: a prior deploy rendered under spp/<name>/auth; the definition
+    # now nests one level deeper (subdirectory: exclude-argocd/auth). The SPP sweep root must stay at
+    # spp/<name>/ so the shallower old-layout file is swept rather than stranded beside the new subtree.
+    it "sweeps a stale file left at a shallower path after an SPP subdirectory is nested deeper" do
+      write_template_dir({ "SPP-PLACEHOLDER" => "exclude-argocd/auth" }, region: "us-east-1")
+      spp_base   = File.join(rendered_directory, "us-east-1/staging/orange/spp")
+      old_layout = File.join(spp_base, "staging-qa04a/auth/old.yaml") # previous shallower layout -> now stale
+      FileUtils.mkdir_p(File.dirname(old_layout))
+      File.write(old_layout, "stale")
+      age(old_layout)
+
+      described_class.new(directories: [template_directory], rendered_directory: rendered_directory, spps: ["staging-qa04a"]).render(reconcile_args)
+
+      expect(File.exist?(old_layout)).to be(false)                                                       # shallower old-layout file swept
+      expect(File.exist?(File.join(spp_base, "staging-qa04a/exclude-argocd/auth/app.yaml"))).to be(true) # new nested layout kept
+    end
+
+    # Same orphaning for a non-SPP entry: the base sweep root must stay at <region>/<type>/<color>
+    # regardless of how deep the subdirectory nests, so the shallower old-layout file is swept.
+    it "sweeps a stale file left at a shallower path after a non-SPP subdirectory is nested deeper" do
+      write_template_dir({ "prod" => "exclude-argocd/my-app" }, region: "us-east-1")
+      base       = File.join(rendered_directory, "us-east-1/prod/orange")
+      old_layout = File.join(base, "my-app/old.yaml") # previous shallower layout -> now stale
+      FileUtils.mkdir_p(File.dirname(old_layout))
+      File.write(old_layout, "stale")
+      age(old_layout)
+
+      render!
+
+      expect(File.exist?(old_layout)).to be(false)                                       # shallower old-layout file swept
+      expect(File.exist?(File.join(base, "exclude-argocd/my-app/app.yaml"))).to be(true) # new nested layout kept
+    end
+
+    # Under --reconcile every entry must render under its canonical root. A non-SPP entry whose
+    # directory: lands inside rendered_directory but outside <region>/<type>/<color> is not owned by
+    # reconcile, so it is a hard error before any writes rather than a sweep of the wrong tree.
+    it "hard-errors and deletes nothing when a non-SPP entry renders outside its canonical base path" do
+      File.write(File.join(template_directory, "app.yaml.erb"), "kind: Test\nname: app\n")
+      definitions = {
+        "prod" => { "directory" => "%{plain_region}/elsewhere/app", "regions" => ["us-east-1"], "colors" => ["orange"], "variables" => {} }
+      }
+      File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definitions.to_yaml)
+      preexisting = File.join(rendered_directory, "us-east-1/prod/orange/keep.yaml")
+      FileUtils.mkdir_p(File.dirname(preexisting))
+      File.write(preexisting, "keep")
+      age(preexisting)
+
+      expect { render! }.to raise_error(KubernetesTemplateRendering::Reconciler::OutOfScopeError)
+      expect(File.exist?(preexisting)).to be(true)
+    end
+  end
+
+  it "with --only, builds ResourceSets only for matching entries" do
+    definition = {
+      "staging" => { "directory" => "%{plain_region}/staging/orange/sample-app", "variables" => variables, "regions" => ["us-east-1"], "colors" => ["orange"] },
+      "staging.test" => { "directory" => "%{plain_region}/staging/orange/sample-app-test", "variables" => variables, "regions" => ["us-east-1"], "colors" => ["orange"] }
+    }
+    File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definition.to_yaml)
+
+    renderer = described_class.new(
+      directories: [template_directory],
+      rendered_directory: rendered_directory,
+      only: ["staging.test"]
+    )
+
+    resource_set = instance_double(KubernetesTemplateRendering::ResourceSet)
+    allow(resource_set).to receive(:render)
+    allow(KubernetesTemplateRendering::ResourceSet).to receive(:new).and_return(resource_set)
+
+    renderer.render(args)
+
+    expect(KubernetesTemplateRendering::ResourceSet).to have_received(:new).once
+    expect(KubernetesTemplateRendering::ResourceSet).to have_received(:new).with(
+      hash_including(config: have_attributes(directory: "%{plain_region}/staging/orange/sample-app-test"))
+    )
+  end
+
+  it "raises an error when an --only value matches no entry across any definitions.yaml" do
+    definition = {
+      "staging" => { "directory" => "%{plain_region}/staging/orange/sample-app", "variables" => variables, "regions" => ["us-east-1"], "colors" => ["orange"] }
+    }
+    File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definition.to_yaml)
+
+    renderer = described_class.new(
+      directories: [template_directory],
+      rendered_directory: rendered_directory,
+      only: ["staging.test"]
+    )
+
+    expect { renderer.render(args) }.to raise_error(ArgumentError, /--only values not found.*staging\.test/)
+  end
+
+  it "does not raise when every --only value matches at least one entry" do
+    definition = {
+      "staging" => { "directory" => "%{plain_region}/staging/orange/sample-app", "variables" => variables, "regions" => ["us-east-1"], "colors" => ["orange"] },
+      "staging.test" => { "directory" => "%{plain_region}/staging/orange/sample-app-test", "variables" => variables, "regions" => ["us-east-1"], "colors" => ["orange"] }
+    }
+    File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definition.to_yaml)
+
+    renderer = described_class.new(
+      directories: [template_directory],
+      rendered_directory: rendered_directory,
+      only: ["staging", "staging.test"]
+    )
+
+    resource_set = instance_double(KubernetesTemplateRendering::ResourceSet)
+    allow(resource_set).to receive(:render)
+    allow(KubernetesTemplateRendering::ResourceSet).to receive(:new).and_return(resource_set)
+
+    expect { renderer.render(args) }.not_to raise_error
+  end
+
+  it "with --only and --prune, prunes only the filtered entries' destinations and leaves siblings untouched" do
+    definition = {
+      "staging" => { "directory" => "%{plain_region}/staging/orange/sample-app", "variables" => variables, "regions" => ["us-east-1"], "colors" => ["orange"] },
+      "staging.test" => { "directory" => "%{plain_region}/staging/orange/sample-app-test", "variables" => variables, "regions" => ["us-east-1"], "colors" => ["orange"] }
+    }
+    File.write(File.join(template_directory, described_class::DEFINITIONS_FILENAME), definition.to_yaml)
+
+    staging_dest = File.join(rendered_directory, "us-east-1/staging/orange/sample-app")
+    staging_test_dest = File.join(rendered_directory, "us-east-1/staging/orange/sample-app-test")
+    FileUtils.mkdir_p(staging_dest)
+    FileUtils.mkdir_p(staging_test_dest)
+
+    renderer = described_class.new(
+      directories: [template_directory],
+      rendered_directory: rendered_directory,
+      only: ["staging.test"]
+    )
+
+    args.prune = true
+
+    allow(FileUtils).to receive(:rm_rf).and_call_original
+
+    renderer.render(args)
+
+    expect(FileUtils).to have_received(:rm_rf).with(staging_test_dest)
+    expect(FileUtils).not_to have_received(:rm_rf).with(staging_dest)
+    expect(File.exist?(staging_dest)).to be(true)
   end
 end

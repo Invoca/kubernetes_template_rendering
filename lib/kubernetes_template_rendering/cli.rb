@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
+require "json"
+
 require_relative "template_directory_renderer"
 require_relative "cli_arguments"
+require_relative "variable_override_parser"
 
 module KubernetesTemplateRendering
   class CLI
@@ -32,14 +35,27 @@ module KubernetesTemplateRendering
           op.on("--region=REGION",                             "set the specific region to render")                                   { args.region = _1 }
           op.on("--color=COLOR",                               "set the specific color to render")                                    { args.color = _1 }
           op.on("--[no-]prune",                                "enable/disable pruning of untouched resources")                       { args.prune = _1 }
+          op.on("--[no-]reconcile",                            "bounded post-render sweep of stale resources")                        { args.reconcile = _1 }
           op.on("--source-repo=SOURCE_REPO",                   "set the source repo for the rendered templates")                      { args.source_repo = _1 }
+          op.on("--spp=NAME", "Staging Partial Platform target name to expand SPP-PLACEHOLDER output for (repeatable)") do |name|
+            args.spps ||= []
+            args.spps << name
+          end
+          op.on("--only=NAME", "render only the definitions.yaml entry with this exact top-level key (repeatable)") do |name|
+            args.only ||= []
+            args.only << name
+          end
 
-          op.on("--variable-override=KEY:VALUE", "override a variable value set within definitions.yaml", Array) do |overrides|
+          op.on("--variable-override=KEY:VALUE", "override a variable value set within definitions.yaml (KEY may be a dotted path, e.g. components.webServer.hpa.minReplicas:2; escape literal dots as \\.)", Array) do |overrides|
             args.variable_overrides ||= {} # Initialize as a Hash
             overrides.each do |override|
-              key, value = override.split(":", 2)
-              args.variable_overrides[key] = value if key && value
+              VariableOverrideParser.merge_override!(args.variable_overrides, override)
             end
+          end
+
+          op.on("--variable-override-json=JSON", "deep-merge a JSON object of variable overrides (repeatable; later flags win)") do |json|
+            args.variable_overrides ||= {}
+            VariableOverrideParser.merge_json!(args.variable_overrides, json)
           end
 
           op.on("-h", "--help") do
@@ -48,12 +64,36 @@ module KubernetesTemplateRendering
           end
         end
 
-        parser.parse!(options)
+        begin
+          parser.parse!(options)
+        rescue VariableOverrideParser::ParseError => ex
+          STDERR.puts(ex.message)
+          exit(1)
+        end
         args.template_directory = options.first
+        args.spps = (args.spps || []).uniq
+        args.only = (args.only || []).uniq
 
         unless args.valid?
           STDERR.puts(parser)
           exit(1)
+        end
+
+        if args.reconcile? && args.prune?
+          STDERR.puts("--reconcile and --prune are mutually exclusive")
+          exit(1)
+        end
+
+        # --only renders a subset of entries, but reconcile sweeps the shared <region>/<type>/<color>
+        # base root; the un-rendered siblings would look stale and be deleted. SPP targeting uses --spp
+        # (which scopes reconcile to per-SPP subtrees), so --only + --reconcile is rejected outright.
+        if args.reconcile? && args.only.any?
+          STDERR.puts("--reconcile and --only are mutually exclusive")
+          exit(1)
+        end
+
+        if args.variable_overrides&.any?
+          puts "Variable overrides (deep-merged after definitions.yaml): #{JSON.generate(args.variable_overrides)}"
         end
 
         [renderer_from_args(args), args]
@@ -69,7 +109,9 @@ module KubernetesTemplateRendering
           region: args.region,
           color: args.color,
           variable_overrides: args.variable_overrides,
-          source_repo: args.source_repo
+          source_repo: args.source_repo,
+          spps: args.spps,
+          only: args.only
         )
       end
 

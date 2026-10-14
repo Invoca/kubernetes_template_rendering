@@ -15,7 +15,7 @@ RSpec.describe KubernetesTemplateRendering::CLI do
     end
   end
 
-  let(:render_option) { "--render-directory=#{render_directory}" }
+  let(:render_option) { "--rendered-directory=#{render_directory}" }
   let(:templates_directory) { "/tmp/templates" }
   let(:template_directory_option) { File.join(templates_directory, "tts-service") }
   let(:help_option) { "--help" }
@@ -79,6 +79,58 @@ RSpec.describe KubernetesTemplateRendering::CLI do
     end
   end
 
+  describe "--reconcile flag" do
+    let(:options) { [render_option, "--reconcile", template_directory_option] }
+
+    before do
+      FileUtils.mkdir(template_directory_option) rescue nil
+      FileUtils.touch(File.join(template_directory_option, described_class::DEFINITIONS_FILENAME))
+    end
+
+    it "sets reconcile to true on the parsed args" do
+      _renderer, args = described_class.send(:parse, options)
+      expect(args.reconcile?).to be(true)
+    end
+
+    context "with --no-reconcile" do
+      let(:options) { [render_option, "--no-reconcile", template_directory_option] }
+
+      it "sets reconcile to false" do
+        _renderer, args = described_class.send(:parse, options)
+        expect(args.reconcile?).to be(false)
+      end
+    end
+
+    context "when omitted" do
+      let(:options) { [render_option, template_directory_option] }
+
+      it "defaults reconcile to false" do
+        _renderer, args = described_class.send(:parse, options)
+        expect(args.reconcile?).to be(false)
+      end
+    end
+
+    context "when combined with --prune" do
+      let(:expect_system_exit) { true }
+      let(:options) { [render_option, "--reconcile", "--prune", template_directory_option] }
+
+      it "exits with a mutually-exclusive error" do
+        expect(STDERR).to receive(:puts).with(/--reconcile and --prune are mutually exclusive/)
+        expect { described_class.send(:parse, options) }.to raise_exception(SystemExit)
+      end
+    end
+
+    context "when combined with --only" do
+      let(:expect_system_exit) { true }
+      let(:options) { [render_option, "--reconcile", "--only=frontend", template_directory_option] }
+
+      it "exits with a mutually-exclusive error" do
+        expect(STDERR).to receive(:puts).with(/--reconcile and --only are mutually exclusive/)
+        expect { described_class.send(:parse, options) }.to raise_exception(SystemExit)
+      end
+    end
+  end
+
   context "when a template directory name is passed" do
     let(:options) { [render_option, template_directory_option] }
 
@@ -98,7 +150,9 @@ RSpec.describe KubernetesTemplateRendering::CLI do
                                                  region: nil,
                                                  cluster_type: nil,
                                                  variable_overrides: nil,
-                                                 source_repo: nil
+                                                 source_repo: nil,
+                                                 spps: [],
+                                                 only: []
                                                )
                                                .and_return(renderer)
 
@@ -114,6 +168,95 @@ RSpec.describe KubernetesTemplateRendering::CLI do
       it "raises an exception" do
         expect{ cli }.to raise_exception(ArgumentError, /template directory not found/)
       end
+    end
+  end
+
+  describe "--spp flag" do
+    let(:options) { [render_option, "--spp=staging-qa02a", "--spp=staging-qa08a", "--spp=staging-qa02a", template_directory_option] }
+
+    before do
+      FileUtils.mkdir_p(template_directory_option)
+      FileUtils.touch(File.join(template_directory_option, described_class::DEFINITIONS_FILENAME))
+    end
+
+    it "accumulates SPP names and deduplicates" do
+      _, args = described_class.send(:parse, options)
+      expect(args.spps).to eq(["staging-qa02a", "staging-qa08a"])
+    end
+
+    it "threads the SPP targets into the renderer" do
+      expect(cli.spps).to eq(["staging-qa02a", "staging-qa08a"])
+    end
+
+    it "defaults to an empty list when not provided" do
+      _, args = described_class.send(:parse, [render_option, template_directory_option])
+      expect(args.spps).to eq([])
+    end
+  end
+
+  describe "--only flag" do
+    let(:options) { [render_option, template_directory_option] }
+
+    before do
+      FileUtils.mkdir_p(template_directory_option)
+      FileUtils.touch(File.join(template_directory_option, described_class::DEFINITIONS_FILENAME))
+    end
+
+    it "accumulates entry names and deduplicates" do
+      _, args = described_class.send(:parse, [render_option, "--only=staging", "--only=staging.test", "--only=staging", template_directory_option])
+      expect(args.only).to eq(["staging", "staging.test"])
+    end
+
+    it "defaults to an empty list when not provided" do
+      _, args = described_class.send(:parse, [render_option, template_directory_option])
+      expect(args.only).to eq([])
+    end
+  end
+
+  describe "--variable-override parsing" do
+    # required by the file-wide before-hook, which consumes `options`; copied from the --only block's let
+    let(:options) { [render_option, template_directory_option] }
+
+    before do
+      FileUtils.mkdir_p(template_directory_option)
+      FileUtils.touch(File.join(template_directory_option, described_class::DEFINITIONS_FILENAME))
+    end
+
+    it "keeps legacy top-level string overrides unchanged, including comma-splitting" do
+      _, args = described_class.send(:parse, [render_option, "--variable-override=deploySha:abc123,rails_env:staging", template_directory_option])
+      expect(args.variable_overrides).to eq("deploySha" => "abc123", "rails_env" => "staging")
+    end
+
+    it "deep-merges dotted-path and JSON overrides in command-line order" do
+      options = [
+        render_option,
+        "--variable-override=deploySha:abc123",
+        '--variable-override-json={"components":{"webServer":{"hpa":{"minReplicas":1,"maxReplicas":4}}}}',
+        "--variable-override=components.webServer.hpa.minReplicas:2",
+        template_directory_option
+      ]
+      _, args = described_class.send(:parse, options)
+      expect(args.variable_overrides).to eq(
+        "deploySha"  => "abc123",
+        "components" => { "webServer" => { "hpa" => { "minReplicas" => 2, "maxReplicas" => 4 } } }
+      )
+    end
+
+    it "echoes the parsed overrides to stdout" do
+      expect(described_class).to receive(:puts).with(/\AVariable overrides \(deep-merged after definitions\.yaml\): /)
+      described_class.send(:parse, [render_option, "--variable-override=deploySha:abc", template_directory_option])
+    end
+
+    it "exits 1 with a STDERR message for invalid --variable-override-json" do
+      expect(STDERR).to receive(:puts).with(/not valid JSON/)
+      expect { described_class.send(:parse, [render_option, "--variable-override-json={nope", template_directory_option]) }
+        .to raise_exception(SystemExit)
+    end
+
+    it "exits 1 with a STDERR message for an empty dotted-path segment" do
+      expect(STDERR).to receive(:puts).with(/empty path segment/)
+      expect { described_class.send(:parse, [render_option, "--variable-override=a..b:1", template_directory_option]) }
+        .to raise_exception(SystemExit)
     end
   end
 end

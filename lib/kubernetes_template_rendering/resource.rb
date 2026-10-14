@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "pathname"
 require_relative "color"
 require_relative "erb_template"
@@ -41,7 +42,9 @@ module KubernetesTemplateRendering
       if args.render_files?
         if rt.is_a?(Hash)
           rt.each do |filename, contents|
-            File.write(output_path(filename), contents)
+            path = output_path(filename)
+            FileUtils.mkdir_p(File.dirname(path))
+            File.write(path, contents)
           end
         else
           File.write(output_path(@output_filename), rt)
@@ -66,7 +69,43 @@ module KubernetesTemplateRendering
     end
 
     def output_path(filename)
-      File.join(@output_directory, filename)
+      path = File.join(@output_directory, filename)
+      base = File.expand_path(@output_directory)
+      expanded = File.expand_path(path)
+
+      unless expanded == base || expanded.start_with?(base + File::SEPARATOR)
+        raise ArgumentError, "output filename #{filename.inspect} escapes output directory #{@output_directory}"
+      end
+
+      validate_resolved_containment!(File.dirname(expanded), base, filename)
+      expanded
+    end
+
+    def validate_resolved_containment!(target_dir, base, filename)
+      base_real = realpath_or_expand(base)
+      current = base_real
+      Pathname.new(target_dir).relative_path_from(Pathname.new(base)).each_filename do |part|
+        candidate = File.join(current, part)
+        if File.symlink?(candidate)
+          raise ArgumentError, "output filename #{filename.inspect} escapes output directory #{@output_directory}"
+        end
+
+        if File.exist?(candidate)
+          current = File.realpath(candidate)
+        else
+          break
+        end
+      end
+
+      return if current == base_real || current.start_with?(base_real + File::SEPARATOR)
+
+      raise ArgumentError, "output filename #{filename.inspect} escapes output directory #{@output_directory}"
+    end
+
+    def realpath_or_expand(path)
+      File.realpath(path)
+    rescue Errno::ENOENT
+      File.expand_path(path)
     end
 
     def template_filename(template_path)

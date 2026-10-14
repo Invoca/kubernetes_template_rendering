@@ -1,0 +1,10 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-SPP-PLACEHOLDER
+  namespace: SPP-PLACEHOLDER
+  labels:
+    platform: SPP-PLACEHOLDER
+    tags: staging,PLACEHOLDER
+spec:
+  replicas: 1

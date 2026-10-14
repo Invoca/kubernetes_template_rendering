@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../../lib/kubernetes_template_rendering/deploy_grouped_resource"
+require_relative "../../lib/kubernetes_template_rendering/cli_arguments"
 
 RSpec.describe KubernetesTemplateRendering::DeployGroupedResource do
   subject(:grouped) do
@@ -24,7 +25,7 @@ RSpec.describe KubernetesTemplateRendering::DeployGroupedResource do
   let(:groups_to_render) { ["primary", "secondary"] }
   let(:template_path_exclusions) { }
   let(:group_variable_name) { }
-  let(:args) { KubernetesTemplateRendering::CLI::Arguments.new(rendered_directory, template_directory, false, '') }
+  let(:args) { KubernetesTemplateRendering::CLIArguments.new(rendered_directory, template_directory, false, '') }
 
   before do
     stub_puts
@@ -41,7 +42,9 @@ RSpec.describe KubernetesTemplateRendering::DeployGroupedResource do
                                 variables: variables.merge("deploy_group" => group),
                                 output_directory: output_directory,
                                 output_filename: "template-#{group}-deploy.yaml",
-                                definitions_path: definitions_path
+                                definitions_path: definitions_path,
+                                variable_overrides: {},
+                                source_repo: nil
                               )
                               .and_return(resource)
 
@@ -67,7 +70,9 @@ RSpec.describe KubernetesTemplateRendering::DeployGroupedResource do
                               variables: variables.merge("deploy_group" => "secondary"),
                               output_directory: output_directory,
                               output_filename: "template-secondary-deploy.yaml",
-                              definitions_path: definitions_path
+                              definitions_path: definitions_path,
+                              variable_overrides: {},
+                              source_repo: nil
                             )
                             .and_return(resource)
       expect(resource).to receive(:render)
@@ -88,7 +93,47 @@ RSpec.describe KubernetesTemplateRendering::DeployGroupedResource do
                                 variables: variables.merge("owner" => group),
                                 output_directory: output_directory,
                                 output_filename: "template-#{group}-deploy.yaml",
-                                definitions_path: definitions_path
+                                definitions_path: definitions_path,
+                                variable_overrides: {},
+                                source_repo: nil
+                              )
+                              .and_return(resource)
+
+        expect(resource).to receive(:render)
+      end
+
+      grouped.render(args)
+    end
+  end
+
+  context "when variable_overrides and source_repo are provided" do
+    subject(:grouped) do
+      described_class.new(
+        template_path: template_path,
+        definitions_path: definitions_path,
+        variables: variables,
+        output_directory: output_directory,
+        groups_to_render: groups_to_render,
+        template_path_exclusions: template_path_exclusions,
+        group_variable_name: group_variable_name,
+        variable_overrides: { "deploySha" => "abc123" },
+        source_repo: "Invoca/web"
+      )
+    end
+
+    it "forwards variable_overrides and source_repo to each child Resource" do
+      groups_to_render.each do |group|
+        resource = instance_double(KubernetesTemplateRendering::Resource)
+
+        expect(KubernetesTemplateRendering::Resource).to receive(:new)
+                              .with(
+                                template_path: template_path,
+                                variables: variables.merge("deploy_group" => group),
+                                output_directory: output_directory,
+                                output_filename: "template-#{group}-deploy.yaml",
+                                definitions_path: definitions_path,
+                                variable_overrides: { "deploySha" => "abc123" },
+                                source_repo: "Invoca/web"
                               )
                               .and_return(resource)
 

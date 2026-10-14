@@ -37,4 +37,9 @@ Gem::Specification.new do |spec|
   spec.add_dependency "activesupport", "< 8"
   spec.add_dependency "jsonnet"
   spec.add_dependency "invoca-utils"
+
+  # `ostruct` was removed from Ruby's default gems in 4.0.0 and is required directly
+  # in lib/, so it must be declared explicitly. (`logger`, also dropped from default
+  # gems, is pulled in transitively by activesupport.)
+  spec.add_dependency "ostruct"
 end

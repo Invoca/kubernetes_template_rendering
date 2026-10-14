@@ -3,8 +3,10 @@
 require 'active_support'
 require 'active_support/core_ext' # for deep_merge
 require 'invoca/utils'
+require 'pathname'
 require 'yaml'
 require_relative 'resource_set'
+require_relative 'reconciler'
 require 'set'
 
 # This class points to a collection of template directories to render, and a rendered_directory to render into.
@@ -12,10 +14,13 @@ require 'set'
 module KubernetesTemplateRendering
   class TemplateDirectoryRenderer
     DEFINITIONS_FILENAME = "definitions.yaml"
+    SPP_FENCE_DIRNAME = "spp"
 
-    attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color, :variable_overrides, :source_repo
+    attr_reader :directories, :omitted_names, :rendered_directory, :cluster_type, :region, :color,
+                :variable_overrides, :source_repo, :spps, :only
 
-    def initialize(directories:, rendered_directory:, omitted_names: [], cluster_type: nil, region: nil, color: nil, variable_overrides: nil, source_repo: nil)
+    def initialize(directories:, rendered_directory:, omitted_names: [], cluster_type: nil, region: nil, color: nil,
+                   variable_overrides: nil, source_repo: nil, spps: [], only: [])
       @directories        = directories_with_definitions(Array(directories))
       @omitted_names      = Array(omitted_names)
       @rendered_directory = rendered_directory
@@ -24,9 +29,16 @@ module KubernetesTemplateRendering
       @color              = color
       @variable_overrides = variable_overrides || {}
       @source_repo        = source_repo
+      @spps               = Array(spps)
+      @only               = Array(only)
     end
 
     def render(args)
+      if args.reconcile?
+        sweep_scopes = collect_reconcile_scopes # validates out-of-prefix before any writes
+        reconciler   = Reconciler.new(@rendered_directory) # marker captured before rendering/forking
+      end
+
       child_pids = []
       failed_processes = [] # [[pid, status]]
 
@@ -58,9 +70,101 @@ module KubernetesTemplateRendering
           raise "Child process completed with non-zero status: #{failed_processes.inspect}"
         end
       end
+
+      reconcile_sweep(reconciler, sweep_scopes) if args.reconcile?
     end
 
     private
+
+    # Collects sweep roots across all rendered resource sets and validates that each stays within
+    # rendered_directory (out-of-prefix, full or relative `..`, is a hard error).
+    #
+    # Returns two categories:
+    #   base_roots — non-SPP entries' shared parent (e.g. <region>/<cluster_type>/<color>/);
+    #                swept with an spp/ fence so sibling SPP directories are never touched.
+    #   spp_roots  — the specific SPP directory/directories that were rendered (e.g. spp/<spp-name>/);
+    #                swept without a fence since we are already inside exactly one SPP directory.
+    #                Without --spp, only the SPP-PLACEHOLDER root is swept. With --spp, the sweep
+    #                covers SPP-PLACEHOLDER (always re-rendered) plus each requested target; unrequested
+    #                siblings are left intact (their deleted-SPP cleanup stays a manual git rm).
+    def collect_reconcile_scopes
+      scopes = resource_sets.values.flatten.flat_map(&:reconcile_scopes)
+      scopes.each do |scope|
+        validate_within_scope!(scope[:base_root], @rendered_directory)
+        validate_spp_layout!(scope)
+        # Every entry must render within its canonical root so reconcile owns exactly what it sweeps.
+        # SPP entries are already constrained to the spp/SPP-PLACEHOLDER prefix by validate_spp_layout!;
+        # a non-SPP entry can only escape its base via the deprecated `directory:` field, which reconcile
+        # cannot own — so reject it before any writes rather than sweep a tree it does not render into.
+        validate_within_scope!(scope[:output_directory], scope[:base_root]) unless scope[:spp]
+      end
+
+      base_roots = []
+      spp_roots  = []
+      scopes.each do |scope|
+        if within_spp_subtree?(scope[:base_root])
+          spp_roots.concat(spp_reconcile_roots(scope))
+        else
+          base_roots << scope[:base_root]
+        end
+      end
+      spp_roots.each { |r| validate_within_scope!(r, @rendered_directory) }
+      { base_roots: base_roots.uniq, spp_roots: spp_roots.uniq }
+    end
+
+    # Raises unless `path` resolves within `scope_root` (full-path or relative `..` escape).
+    # Lexical check (expand_path, not realpath) so it validates planned roots before they exist;
+    # Reconciler applies a separate realpath-based guard against symlink escapes during the sweep.
+    def validate_within_scope!(path, scope_root)
+      resolved = File.expand_path(path)
+      root = File.expand_path(scope_root)
+      unless resolved == root || resolved.start_with?(root + File::SEPARATOR)
+        raise Reconciler::OutOfScopeError, "reconcile: path #{resolved} resolves outside scope prefix #{root}"
+      end
+    end
+
+    # Under --reconcile, SPP entries must render beneath the canonical
+    # <region>/<cluster_type>/<color>/spp/SPP-PLACEHOLDER/ prefix, and non-SPP entries must never
+    # render beneath any spp/ segment. A directory:-overridden path that still resolves to the
+    # canonical SPP prefix is allowed; anything else is a hard error before any writes.
+    def validate_spp_layout!(scope)
+      output = File.expand_path(scope[:output_directory])
+      if scope[:spp]
+        base = File.expand_path(scope[:spp_base_root])
+        unless output == base || output.start_with?(base + File::SEPARATOR)
+          raise Reconciler::SppLayoutError,
+                "reconcile: SPP entry renders to #{output}, outside the required SPP prefix #{base}"
+        end
+      elsif within_spp_subtree?(scope[:output_directory])
+        raise Reconciler::SppLayoutError,
+              "reconcile: non-SPP entry renders under an spp/ segment (#{output}); only SPP entries may render beneath spp/"
+      end
+    end
+
+    # Expands an SPP sweep root into the concrete roots to sweep for this run.
+    # Without --spp, the placeholder root (spp/SPP-PLACEHOLDER) is swept as-is. With --spp, the sweep
+    # covers the placeholder root *and* each requested target (spp/staging-qa02a, ...): SPP-PLACEHOLDER
+    # is always re-rendered (it is the expansion source) and each target is freshly expanded from it,
+    # so both are marker-safe. Unrequested SPP siblings are not re-rendered this run and stay excluded.
+    def spp_reconcile_roots(scope)
+      # base_root is the canonical `.../spp/SPP-PLACEHOLDER` prefix for SPP entries.
+      root = scope[:base_root]
+      return [root] if @spps.empty?
+      return [root] unless root.include?(ResourceSet::SPP_PLACEHOLDER)
+
+      [root] + @spps.map { |spp_name| root.gsub(ResourceSet::SPP_PLACEHOLDER, spp_name) }
+    end
+
+    def within_spp_subtree?(root)
+      Pathname.new(root).relative_path_from(Pathname.new(@rendered_directory)).each_filename.include?(SPP_FENCE_DIRNAME)
+    end
+
+    def reconcile_sweep(reconciler, scopes)
+      scopes[:base_roots].each { |r| reconciler.sweep!(root: r, fences: [File.join(r, SPP_FENCE_DIRNAME)]) }
+      scopes[:spp_roots].each  { |r| reconciler.sweep!(root: r) }
+    ensure
+      reconciler.finish!
+    end
 
     def read_definitions(path)
       File.read(path)
@@ -106,26 +210,48 @@ module KubernetesTemplateRendering
     end
 
     def resource_sets
-      @resource_sets ||= @directories.each_with_object({}) do |dir, hash|
-        definitions_path = definitions_path_for_dir(dir)
-        config = load_config(definitions_path)
+      @resource_sets ||= begin
+        matched_only = Set.new
+        all_keys = Set.new
+        sets = @directories.each_with_object({}) do |dir, hash|
+          definitions_path = definitions_path_for_dir(dir)
+          config = load_config(definitions_path)
 
-        config.map do |name, config|
-          next if omitted_names.include?(name)
+          config.each_key { |name| all_keys << name }
 
-          kubernetes_cluster_type = name.sub('SPP-PLACEHOLDER', 'staging').sub(/\..*/, '') # prod.gcp => prod
+          config.map do |name, config|
+            next if omitted_names.include?(name)
+            next if @only.any? && !@only.include?(name)
+            matched_only << name if @only.include?(name)
 
-          hash[name] ||= []
-          hash[name] << ResourceSet.new(
-            config: config,
-            template_directory: dir,
-            rendered_directory: @rendered_directory,
-            kubernetes_cluster_type: kubernetes_cluster_type,
-            definitions_path: definitions_path,
-            variable_overrides: @variable_overrides,
-            source_repo: @source_repo
-          )
+            kubernetes_cluster_type = name.sub(ResourceSet::SPP_PLACEHOLDER, 'staging').sub(/\..*/, '') # prod.gcp => prod
+            spp = name.include?(ResourceSet::SPP_PLACEHOLDER)
+
+            hash[name] ||= []
+            hash[name] << ResourceSet.new(
+              config: config,
+              template_directory: dir,
+              rendered_directory: @rendered_directory,
+              kubernetes_cluster_type: kubernetes_cluster_type,
+              spp: spp,
+              spps: @spps,
+              definitions_path: definitions_path,
+              variable_overrides: @variable_overrides,
+              source_repo: @source_repo
+            )
+          end
         end
+
+        if @only.any?
+          unmatched = @only - matched_only.to_a
+          if unmatched.any?
+            raise ArgumentError,
+                  "--only values not found in any definitions.yaml entry: #{unmatched.inspect}. " \
+                  "Valid keys: #{all_keys.to_a.sort.inspect}"
+          end
+        end
+
+        sets
       end
     end
 
@@ -173,7 +299,7 @@ module KubernetesTemplateRendering
       end
 
       expand_config(config).each_with_object({}) do |(name, data), hash|
-        if !cluster_type || cluster_type == name.sub('SPP-PLACEHOLDER', 'staging').sub(/\..*/, '') # prod.gcp => prod
+        if !cluster_type || cluster_type == name.sub(ResourceSet::SPP_PLACEHOLDER, 'staging').sub(/\..*/, '') # prod.gcp => prod
           cluster_type_config = OpenStruct.new(data)
 
           cluster_type_config.regions   = cluster_type_config.regions & [region] if region
