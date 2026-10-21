@@ -4,6 +4,10 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-10-14
+### Added
+- Added `us-west-2` (AWS) to region mappings for the new us-west-2 production cluster
+
 ## [0.8.0] - 2026-07-23
 ### Added
 - MULTI_FILE_RENDER keys and `MULTI_FILE_RENDER_NAME` values may now contain `/` to render into nested output directories (e.g. key `pr-1/app/foo` writes `<output dir>/pr-1/app/foo.yaml`); intermediate directories are created automatically. Previously such keys crashed with `Errno::ENOENT`. Names that resolve outside the output directory raise `ArgumentError` before any write. See docs/adrs/0003-nested-multi-file-output.md.
