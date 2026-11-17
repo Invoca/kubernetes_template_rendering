@@ -1,0 +1,6 @@
+# frozen_string_literal: true
+
+eval_gemfile "../Gemfile"
+
+# GHSA-8474-xrp6-wh69 is fixed starting at 8.1.4.1 on the 8.1 branch.
+gem "activesupport", "~> 8.1.4", ">= 8.1.4.1"

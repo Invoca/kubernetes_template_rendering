@@ -4,6 +4,11 @@ Inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Note: this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-11-17
+### Fixed
+- Allow ActiveSupport 8 by widening the runtime dependency from `< 8` to `< 9`, so consumers can upgrade to 8.0.5.2+ or 8.1.4.1+ for the GHSA-8474-xrp6-wh69 `safe_constantize` denial-of-service fix. Keep older ActiveSupport versions and Ruby 3.1 eligible; this compatibility change does not require all consumers to upgrade or patch older releases.
+- Update the development lockfile to patched ActiveSupport 8.1 and exercise the existing 7.2.3.1 version and patched 8.0 and 8.1 branches in CI.
+
 ## [0.8.1] - 2026-10-14
 ### Added
 - Added `us-west-2` (AWS) to region mappings for the new us-west-2 production cluster
