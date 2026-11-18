@@ -1,0 +1,6 @@
+# frozen_string_literal: true
+
+eval_gemfile "../Gemfile"
+
+# Keep exercising the version used before ActiveSupport 8 support was added.
+gem "activesupport", "7.2.3.1"

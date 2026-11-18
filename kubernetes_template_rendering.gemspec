@@ -34,7 +34,9 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "activesupport", "< 8"
+  # Preserve older consumers while allowing patched 8.0 and 8.1 releases.
+  # ActiveSupport 9 has not been tested.
+  spec.add_dependency "activesupport", "< 9"
   spec.add_dependency "jsonnet"
   spec.add_dependency "invoca-utils"
 

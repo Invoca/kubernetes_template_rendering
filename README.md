@@ -126,6 +126,10 @@ This is purely additive — the placeholder-bearing output tree is still produce
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
 
+Run `bundle exec rake` for the test suite and RuboCop. The Buildkite Ruby matrix also discovers `gemfiles/*.gemfile` and runs the test suite with ActiveSupport 7.2.3.1, 8.0.x (>= 8.0.5.2), and 8.1.x (>= 8.1.4.1). To run a particular dependency branch locally, use `BUNDLE_GEMFILE=gemfiles/activesupport_8_0.gemfile bundle exec rspec` (after resolving its dependencies).
+
+The runtime dependency allows older ActiveSupport versions for existing consumers and excludes the untested major version 9. To address [GHSA-8474-xrp6-wh69](https://github.com/advisories/GHSA-8474-xrp6-wh69), consumers must select ActiveSupport 8.0.5.2+ on the 8.0 branch or 8.1.4.1+ on the 8.1 branch. ActiveSupport 8 requires Ruby >= 3.2; Ruby 3.1 consumers can continue using older ActiveSupport, which is still affected by this advisory.
+
 To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
 
 ## Contributing
