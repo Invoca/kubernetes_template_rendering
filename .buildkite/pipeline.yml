@@ -9,6 +9,6 @@ steps:
   plugins:
     - ssh://git@github.com/Invoca/invoca-ruby-test-matrix-buildkite-plugin.git#main:
         min_ruby_version: '3.3'
-        slack_notification_channel: '#dev-team-release-backend-tools-octothorpe'
+        slack_notification_channel: '#dev-pagerduty-release-engineering-octothorpeand-backend-platform-'
         # The plugin discovers gemfiles/*.gemfile for the ActiveSupport matrix.
         test_command: "bundle exec rspec"
